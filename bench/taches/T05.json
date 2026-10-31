@@ -1,0 +1,35 @@
+{
+  "id": "T05",
+  "titre": "Recherche dans des fichiers",
+  "prompt": "Prépare d'abord les données en exécutant exactement cette commande depuis la racine du workspace :\n\n```sh\nmkdir -p {dir}/journaux && for i in $(seq 1 40); do if [ $((i % 7)) -eq 3 ]; then c=ERREUR-7731; else c=ERREUR-1$i; fi; printf 'service=s%s\\nniveau=info\\ncode=%s\\n' \"$i\" \"$c\" > {dir}/journaux/j$(printf %02d $i).log; done\n```\n\nEnsuite, trouve tous les fichiers de `{dir}/journaux` qui contiennent le code `ERREUR-7731` et écris leurs noms de fichier (sans le chemin), triés, un par ligne, dans `{dir}/resultat.txt`. Publie le nombre de fichiers trouvés en commentaire et passe le ticket en done.",
+  "verifs": [
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "fichier",
+      "chemin": "{dir}/resultat.txt",
+      "lignes_basename": [
+        "j03.log",
+        "j10.log",
+        "j17.log",
+        "j24.log",
+        "j31.log",
+        "j38.log"
+      ]
+    },
+    {
+      "type": "commentaire_agent",
+      "min_len": 5,
+      "mots": [
+        "6"
+      ]
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done"
+      ]
+    }
+  ]
+}

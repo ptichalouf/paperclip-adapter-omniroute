@@ -1,0 +1,22 @@
+{
+  "id": "T07",
+  "titre": "Créer une sous-tâche",
+  "prompt": "Crée une sous-tâche de ce ticket (parentId = ce ticket, même projet), intitulée exactement « Sous-tâche banc {tag} », assignée à toi-même, au statut backlog, avec une description d'une ligne. Ne la traite pas. Publie ensuite en commentaire l'identifiant (ACC-…) de la sous-tâche créée et passe ce ticket en done.",
+  "verifs": [
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "sous_tache",
+      "titre_contient": "Sous-tâche banc {tag}",
+      "assignee_agent": true,
+      "identifiant_commente": true
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done"
+      ]
+    }
+  ]
+}

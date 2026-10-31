@@ -1,0 +1,25 @@
+{
+  "id": "T01",
+  "titre": "Question d'avis (prompt ACC-2277)",
+  "prompt": "Si je te montre ce setup d'organisation : 1 coordinateur + 6 spécialistes dédiés, qu'en penses-tu pour notre agence ? Donne-moi ton analyse structurée.",
+  "verifs": [
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "commentaire_agent",
+      "min_len": 800,
+      "mots": [
+        "coordinateur",
+        "spécialiste"
+      ]
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done",
+        "in_review"
+      ]
+    }
+  ]
+}

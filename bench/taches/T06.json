@@ -1,0 +1,37 @@
+{
+  "id": "T06",
+  "titre": "Longue lecture (skill paperclip)",
+  "prompt": "Lis le skill paperclip en entier (SKILL.md, environ 70 Ko) et, à partir de lui seul, écris dans `{dir}/reponses.json` un objet JSON avec ces clés :\n- `liberer` : méthode HTTP et chemin de l'endpoint pour libérer (release) une tâche ;\n- `bloqueurs` : nom exact du champ pour dire qu'un ticket est bloqué par d'autres tickets ;\n- `recherche` : nom exact du paramètre de requête pour chercher des tickets par texte ;\n- `statut_attente_revue` : le statut à utiliser quand on attend un retour de relecture ou d'approbation.\nPublie un court résumé en commentaire et passe le ticket en done.",
+  "verifs": [
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "json_champs",
+      "chemin": "{dir}/reponses.json",
+      "champs": {
+        "liberer": {
+          "contient": [
+            "POST",
+            "/release"
+          ]
+        },
+        "bloqueurs": {
+          "egal": "blockedByIssueIds"
+        },
+        "recherche": {
+          "egal": "q"
+        },
+        "statut_attente_revue": {
+          "egal": "in_review"
+        }
+      }
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done"
+      ]
+    }
+  ]
+}

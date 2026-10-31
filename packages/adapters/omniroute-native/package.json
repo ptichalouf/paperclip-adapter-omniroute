@@ -1,0 +1,40 @@
+{
+  "name": "@agence/omniroute-native",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adaptateur Paperclip OmniRoute natif — OpenAI Chat Completions (`/v1/chat/completions`) avec reasoning_effort et cache_control_points. Pas de traduction Anthropic Messages.",
+  "type": "module",
+  "license": "MIT",
+  "paperclip": {
+    "adapterUiParser": "1.0.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./server": "./dist/server/index.js",
+    "./ui-parser": "./ui-parser.cjs"
+  },
+  "files": [
+    "dist",
+    "ui-parser.cjs",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "verify": "node test/load-path.verify.mjs && node test/ui-parser.verify.mjs"
+  },
+  "dependencies": {
+    "@paperclipai/adapter-utils": "2026.916.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

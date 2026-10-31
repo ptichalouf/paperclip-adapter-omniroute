@@ -1,0 +1,35 @@
+{
+  "id": "T04",
+  "titre": "Créer puis modifier un fichier du workspace",
+  "prompt": "Dans le workspace, crée le fichier `{dir}/config.json` contenant exactement {\"version\": 1, \"nom\": \"banc\"}. Relis-le. Puis MODIFIE-le (sans le supprimer) pour que `version` vaille 2 et ajoute la clé \"etapes\": [\"lire\", \"ecrire\"]. Vérifie le contenu final en le relisant, publie ce contenu final en commentaire et passe le ticket en done.",
+  "verifs": [
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "fichier",
+      "chemin": "{dir}/config.json",
+      "json_egal": {
+        "version": 2,
+        "nom": "banc",
+        "etapes": [
+          "lire",
+          "ecrire"
+        ]
+      }
+    },
+    {
+      "type": "commentaire_agent",
+      "min_len": 20,
+      "mots": [
+        "etapes"
+      ]
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done"
+      ]
+    }
+  ]
+}

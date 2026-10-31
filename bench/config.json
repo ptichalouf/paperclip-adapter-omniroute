@@ -1,0 +1,27 @@
+{
+  "apiBase": "http://localhost:3100/api",
+  "tokenFile": "/opt/data/.paperclip/board-token-paperclip",
+  "paperclipSsh": "root@localhost",
+  "omnirouteSsh": "root@localhost",
+  "omnirouteDb": "/mnt/cache/appdata/omniroute/storage.sqlite",
+  "omnirouteKeyName": "paperclip-adapter-native",
+  "companyId": "cbf82e48-ef72-44c0-aa79-f72d0c16a19d",
+  "projectId": "ab9d022b-30a4-4805-b846-38f2a176f016",
+  "goalId": "caf4ed50-76ef-400b-a26e-615edc750264",
+  "parentIssueId": "a6a0785e-4653-400b-a8ed-42c3725e7c9c",
+  "parentIssueKey": "ACC-2303",
+  "agentId": "100b3657-0782-4a89-87b9-68749d3c8cfd",
+  "workspaceRoot": "/paperclip/instances/default/projects/cbf82e48-ef72-44c0-aa79-f72d0c16a19d/ab9d022b-30a4-4805-b846-38f2a176f016/_default",
+  "runLogRoot": "/paperclip/instances/default/data/run-logs",
+  "waveTimeoutSec": 1200,
+  "quietSec": 30,
+  "prixOmnirouteUsdParMillion": {
+    "_source": "déduit des en-têtes x-omniroute-response-cost du banc de cache (45 appels, erreur max 3e-16)",
+    "claude-opus-5-5": {
+      "frais": 4.0,
+      "lus": 0.2,
+      "ecrits": 5.0,
+      "sortie": 20.0
+    }
+  }
+}

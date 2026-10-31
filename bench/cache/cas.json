@@ -1,0 +1,218 @@
+[
+ {
+  "id": "C0",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "identique",
+  "session": true,
+  "cacheControl": false,
+  "note": "prompt identique (tours d’un même run)"
+ },
+ {
+  "id": "C1",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": false,
+  "note": "ordre actuel de l’adaptateur, passation en 2e position"
+ },
+ {
+  "id": "C2",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": "partie stable d’abord"
+ },
+ {
+  "id": "C3",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "stable",
+  "session": false,
+  "cacheControl": false,
+  "note": "stable d’abord, sans X-Session-Id/user"
+ },
+ {
+  "id": "C4",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "actuel",
+  "session": false,
+  "cacheControl": false,
+  "note": "ordre actuel, sans session"
+ },
+ {
+  "id": "C5",
+  "api": "chat",
+  "model": "claude/claude-opus-5-5",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": "modèle servi épinglé, stable d’abord"
+ },
+ {
+  "id": "C6",
+  "api": "chat",
+  "model": "claude/claude-opus-5-5",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": false,
+  "note": "modèle servi épinglé, ordre actuel"
+ },
+ {
+  "id": "C7",
+  "api": "chat",
+  "model": "AC-main",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C8",
+  "api": "chat",
+  "model": "AC-main",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C9",
+  "api": "chat",
+  "model": "AC-task",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C10",
+  "api": "chat",
+  "model": "AC-task",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C11",
+  "api": "chat",
+  "model": "AC-code",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C12",
+  "api": "chat",
+  "model": "AC-code",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C13",
+  "api": "chat",
+  "model": "auto/best-coding",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C14",
+  "api": "chat",
+  "model": "auto/best-coding",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": false,
+  "note": ""
+ },
+ {
+  "id": "C15",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": true,
+  "note": "Chat Completions + cache_control dans les parts du message système"
+ },
+ {
+  "id": "M0",
+  "api": "messages",
+  "model": "AC-pro-coding",
+  "ordre": "identique",
+  "session": true,
+  "cacheControl": true,
+  "note": "format Anthropic, prompt identique"
+ },
+ {
+  "id": "M1",
+  "api": "messages",
+  "model": "AC-pro-coding",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": true,
+  "note": "format Anthropic + cache_control après la partie stable"
+ },
+ {
+  "id": "M2",
+  "api": "messages",
+  "model": "AC-pro-coding",
+  "ordre": "actuel",
+  "session": true,
+  "cacheControl": true,
+  "note": "format Anthropic, ordre actuel (point de cache sur l’identité seule)"
+ },
+ {
+  "id": "M3",
+  "api": "messages",
+  "model": "AC-pro-coding",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": false,
+  "note": "format Anthropic sans cache_control"
+ },
+ {
+  "id": "M4",
+  "api": "messages",
+  "model": "claude/claude-opus-5-5",
+  "ordre": "stable",
+  "session": true,
+  "cacheControl": true,
+  "note": "format Anthropic, modèle épinglé"
+ },
+ {
+  "id": "C16",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "stable-user",
+  "session": true,
+  "cacheControl": false,
+  "note": "système identique, passation dans le message utilisateur"
+ },
+ {
+  "id": "C17",
+  "api": "chat",
+  "model": "AC-main",
+  "ordre": "identique",
+  "session": true,
+  "cacheControl": false,
+  "note": "AC-main (gpt servi), prompt identique"
+ },
+ {
+  "id": "C18",
+  "api": "chat",
+  "model": "AC-pro-coding",
+  "ordre": "identique",
+  "session": false,
+  "cacheControl": false,
+  "note": "prompt identique sans session"
+ }
+]

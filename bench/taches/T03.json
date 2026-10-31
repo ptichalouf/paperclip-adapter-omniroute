@@ -1,0 +1,33 @@
+{
+  "id": "T03",
+  "titre": "Livrer document + commentaire + statut",
+  "prompt": "Crée sur ce ticket un document Paperclip de clé `plan` (titre « Plan de test banc ») contenant trois étapes numérotées, dont une étape de vérification (le mot « vérification » doit y figurer). Publie ensuite un commentaire qui renvoie vers ce document, puis passe le ticket en done.",
+  "verifs": [
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "document",
+      "cle": "plan",
+      "mots": [
+        "1",
+        "2",
+        "3",
+        "vérification"
+      ]
+    },
+    {
+      "type": "commentaire_agent",
+      "min_len": 20,
+      "mots": [
+        "plan"
+      ]
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done"
+      ]
+    }
+  ]
+}

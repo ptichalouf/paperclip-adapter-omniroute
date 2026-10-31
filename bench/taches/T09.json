@@ -1,0 +1,31 @@
+{
+  "id": "T09",
+  "titre": "Reprise sur commentaire de suivi (2 réveils)",
+  "prompt": "Tâche en deux temps. Étape 1 (maintenant seulement) : crée `{dir}/etape1.txt` contenant exactement `un`, publie un commentaire « Étape 1 faite », puis passe le ticket en in_review en attendant ma suite. Ne fais pas l'étape 2 avant mon commentaire.",
+  "suivi": "Suite (étape 2) : crée `{dir}/etape2.txt` contenant exactement `deux`, vérifie que `{dir}/etape1.txt` est toujours là, publie un commentaire de fin, puis passe le ticket en done.",
+  "verifs": [
+    {
+      "type": "runs_min",
+      "n": 2
+    },
+    {
+      "type": "run_reussi"
+    },
+    {
+      "type": "fichier",
+      "chemin": "{dir}/etape1.txt",
+      "egal": "un"
+    },
+    {
+      "type": "fichier",
+      "chemin": "{dir}/etape2.txt",
+      "egal": "deux"
+    },
+    {
+      "type": "statut_ticket",
+      "valeurs": [
+        "done"
+      ]
+    }
+  ]
+}
