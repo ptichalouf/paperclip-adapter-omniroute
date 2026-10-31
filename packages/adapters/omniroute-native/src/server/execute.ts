@@ -69,6 +69,7 @@ import {
   type SkillMount,
 } from './skills.js';
 import { resolveHistoryBudgetChars, resolveIntraRunBudgetChars } from './session.js';
+import { calculateDynamicSessionBudgets, loadRemoteModelContext } from '../shared/context-window.js';
 import { isHistoryRejection, openRunSession, RunCheckpointer, startFreshAttempt } from './session-run.js';
 import { collectSecretValues, createRedactor, guardToolOutputs, redactJsonValue } from './secrets-redact.js';
 import type { WireMessage } from '../shared/wire.js';
@@ -229,9 +230,21 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
   // forme d'historique rejoué devant le modèle (dossier stable et privé,
   // écriture atomique sous verrou, purge : voir `session-run.ts`).
   const endEnsureSession = startPhase(ctx.onEvent, 'ensure_session');
-  const modelContextTokens = getModelContextLength(config.model);
-  const historyBudget = resolveHistoryBudgetChars(config.model, modelContextTokens, config.maxContextChars);
-  const intraRunBudget = resolveIntraRunBudgetChars(config.model, modelContextTokens, config.maxContextChars);
+  const contextSpec = await loadRemoteModelContext(
+    config.baseUrl,
+    config.apiKey ?? '',
+    config.model,
+    signal,
+  );
+  const { historyBudgetChars, intraRunBudgetChars } = calculateDynamicSessionBudgets(
+    contextSpec.contextTokens,
+  );
+  const historyBudget = typeof config.maxContextChars === 'number' && config.maxContextChars > 0
+    ? config.maxContextChars
+    : historyBudgetChars;
+  const intraRunBudget = typeof config.maxContextChars === 'number' && config.maxContextChars > 0
+    ? config.maxContextChars
+    : intraRunBudgetChars;
   const session = await openRunSession({
     context: ctx.context, runtime: ctx.runtime, workspaceCwd, historyBudget, redact,
     log: (text) => log('stdout', text), warn,
@@ -762,6 +775,18 @@ function buildPrompt(ctx: AdapterExecutionContext, options: { resumedSession: bo
     context,
   };
 
+  // 1. Passation de session précédente (compactée ou transmise par l'hôte)
+  const freshHandoffRaw = context['paperclipFreshSessionHandoffMarkdown'];
+  const freshHandoff = typeof freshHandoffRaw === 'string' ? freshHandoffRaw.trim() : '';
+  const sessionHandoffNote = asString(context['paperclipSessionHandoffMarkdown'], '').trim();
+
+  const handoffSection = freshHandoff.length > 0
+    ? `## Passation de session précédente\n\n${freshHandoff}`
+    : sessionHandoffNote.length > 0
+      ? `## Passation de session précédente\n\n${sessionHandoffNote}`
+      : '';
+
+  // 2. Note contextuelle de la tâche et Wake Prompt
   const taskContextNote = selectPaperclipTaskMarkdown(context, { resumedSession: options.resumedSession });
   const wakePrompt = renderPaperclipWakePrompt(context['paperclipWake'], {
     resumedSession: options.resumedSession,
@@ -770,8 +795,8 @@ function buildPrompt(ctx: AdapterExecutionContext, options: { resumedSession: bo
     // description du wake prompt pour ne pas la porter deux fois.
     suppressIssueDescription: taskContextNote.length > 0,
   });
-  const sessionHandoffNote = asString(context['paperclipSessionHandoffMarkdown'], '').trim();
 
+  // 3. Gabarit prompt d'action
   const promptTemplate =
     asString(ctx.config?.['promptTemplate'], '').trim() || DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE;
   // Sur un delta de reprise (wake prompt non vide) ou une reprise après
@@ -780,60 +805,59 @@ function buildPrompt(ctx: AdapterExecutionContext, options: { resumedSession: bo
     ? ''
     : renderTemplate(promptTemplate, templateData);
 
-  return joinPromptSections([wakePrompt, sessionHandoffNote, taskContextNote, renderedPrompt]);
+  // 4. Assemblage dans le premier message utilisateur
+  return joinPromptSections([
+    handoffSection,
+    wakePrompt,
+    taskContextNote,
+    renderedPrompt,
+  ]);
 }
 
 /**
- * Variables d'environnement annoncées au modèle dans le prompt système.
- *
- * **Liste blanche, pas liste noire.** Le prompt système part dans le
- * transcript du modèle : il ne doit contenir que des valeurs qu'on accepte
- * de voir figées dans un historique. On n'y met donc que des *noms* de
- * variables et des valeurs non sensibles (URLs, listes de noms d'outils).
- *
- * Le bearer des outils runtime (`PAPERCLIP_RUNTIME_TOOLS_TOKEN`) et le JWT de
- * run (`PAPERCLIP_API_KEY`) restent hors du prompt : ils sont posés dans
- * l'environnement du shell, où l'agent en a besoin pour appeler le board.
+ * Section d'environnement invariante : annonce le contrat des variables sans valeurs éphémères.
  */
-const ANNOUNCED_ENV_VARS = [
-  'PAPERCLIP_API_URL',
-  'PAPERCLIP_AGENT_ID',
-  'PAPERCLIP_COMPANY_ID',
-  'PAPERCLIP_HOME',
-  'PAPERCLIP_RUNTIME_TOOLS_MCP_URL',
-  'PAPERCLIP_RUNTIME_TOOLS_CONNECTIONS_SEARCH_URL',
-  'PAPERCLIP_RUNTIME_TOOLS_CONNECTION_REQUEST_URL',
-  'PAPERCLIP_RUNTIME_TOOLS_AVAILABLE',
-] as const;
+function buildInvariantEnvironmentSection(): string {
+  return [
+    '## Environnement Paperclip',
+    '',
+    'Ces variables d\'infrastructure sont disponibles dans le shell quand l\'environnement le supporte :',
+    '- `PAPERCLIP_API_URL` : URL de base du serveur Paperclip.',
+    '- `PAPERCLIP_AGENT_ID` : Identifiant de cet agent.',
+    '- `PAPERCLIP_COMPANY_ID` : Identifiant de l\'organisation.',
+    '- `PAPERCLIP_HOME` : Répertoire de base de l\'agent.',
+    '',
+    'Variables propres à chaque mission injectées dans le shell :',
+    'PAPERCLIP_TASK_ID, PAPERCLIP_RUN_ID, PAPERCLIP_WAKE_REASON, PAPERCLIP_WORKSPACE_CWD.',
+    'Utilisez `$PAPERCLIP_TASK_ID` pour référencer le ticket courant.',
+    '',
+    'Les jetons d\'authentification (`PAPERCLIP_API_KEY`, `PAPERCLIP_RUNTIME_TOOLS_TOKEN`) sont configurés dans le shell.',
+    'Ne les affichez jamais dans vos réponses ou journaux.',
+  ].join('\n');
+}
 
 /**
- * Noms (jamais les valeurs) des variables propres au run : les valeurs
- * changent à chaque run et casseraient le cache du prompt système.
+ * Section des outils Paperclip invariante : formulation universelle et stable.
  */
-const MISSION_ENV_VAR_NAMES = [
-  'PAPERCLIP_TASK_ID',
-  'PAPERCLIP_RUN_ID',
-  'PAPERCLIP_WAKE_REASON',
-  'PAPERCLIP_WAKE_COMMENT_ID',
-  'PAPERCLIP_APPROVAL_ID',
-  'PAPERCLIP_APPROVAL_STATUS',
-  'PAPERCLIP_LINKED_ISSUE_IDS',
-  'PAPERCLIP_ISSUE_WORK_MODE',
-  'PAPERCLIP_WORKSPACE_CWD',
-  'PAPERCLIP_WORKSPACES_JSON',
-  'PAPERCLIP_RUNTIME_SERVICES_JSON',
-  'PAPERCLIP_RUNTIME_PRIMARY_URL',
-] as const;
+function buildInvariantPaperclipToolsSection(): string {
+  return [
+    '## Outils Paperclip',
+    '',
+    'Pour lire et modifier les tickets, utilisez prioritairement les outils `paperclip_*` :',
+    '- Lire : `paperclip_get_issue` (ticket courant par défaut), `paperclip_list_comments`, `paperclip_get_document`, `paperclip_list_documents`.',
+    '- Écrire : `paperclip_add_comment`, `paperclip_update_issue`, `paperclip_write_document`, `paperclip_create_subtask`.',
+    '- Livrer : `paperclip_deliver` (publie document + commentaire + statut en un seul appel atomique).',
+    '- Autre route d\'API : `paperclip_api_request`.',
+    'Lorsque les outils `connections_search` et `connection_request` sont présents dans la liste d\'outils, utilisez-les pour les interactions de connexion ; sinon, signalez le besoin d\'accès en commentaire.',
+    'Le shell reste réservé aux opérations locales (fichiers du workspace, git, scripts de validation).',
+  ].join('\n');
+}
 
 /**
- * Prompt système. `systemPrompt` de la config prime ; sinon on compose
- * l'identité, les instructions de l'agent, l'index des skills et le rappel
- * d'environnement Paperclip (qui permet à l'agent d'appeler l'API du board
- * depuis son shell).
+ * Prompt système 100 % invariant (v1.3).
  *
- * L'ordre compte : les **instructions de l'agent** viennent avant l'index des
- * skills et avant le rappel d'environnement, parce que ce sont elles qui
- * portent le contrat de travail.
+ * Garanti strictement identique entre tous les runs d'un agent.
+ * Aucune note de passation, aucun horodatage, aucun état dynamique d'outils.
  */
 function buildSystemPrompt(
   ctx: AdapterExecutionContext,
@@ -843,56 +867,16 @@ function buildSystemPrompt(
   const configured = asString(ctx.config?.['systemPrompt'], '').trim();
   if (configured.length > 0) return configured;
 
-  // Seules les variables listées ci-dessus sont annoncées, et uniquement
-  // celles qui existent réellement : la liste blanche décide, la suppression
-  // d'une clé ne le ferait pas (un nouveau secret ajouté par l'hôte
-  // passerait dans le prompt).
-  const env = agentShellEnv(ctx);
-  const envBlock = ANNOUNCED_ENV_VARS.filter((key) => key in env)
-    .map((key) => `${key}=${env[key]}`)
-    .join('\n');
-
-  const handoffRaw = (ctx.context as Record<string, unknown> | undefined)?.['paperclipFreshSessionHandoffMarkdown'];
-  const handoff = typeof handoffRaw === 'string' ? handoffRaw.trim() : '';
-  const handoffBlock = handoff.length > 0 ? `## Passation de session précédente\n\n${handoff}` : '';
-
-  const availability = paperclipToolsAvailability(paperclipToolsOptionsFromEnv(env));
-  const tokensLine = availability.paperclip
-    ? "PAPERCLIP_API_KEY et PAPERCLIP_RUNTIME_TOOLS_TOKEN sont également posées dans le shell (jetons de run et d'outils). Ne les affichez jamais."
-    : "PAPERCLIP_API_KEY et PAPERCLIP_RUNTIME_TOOLS_TOKEN sont également posées dans le shell (jetons de run et d'outils) : elles permettent d'appeler l'API du board. Ne les affichez jamais.";
+  // Tri alphabétique déterministe des skills pour garantir l'identité binaire du cache
+  const sortedMounts = [...skillMounts].sort((a, b) => a.runtimeName.localeCompare(b.runtimeName));
 
   return joinPromptSections([
     `Vous êtes l'agent Paperclip « ${ctx.agent.name} » (${ctx.agent.id}), exécuté via la passerelle OmniRoute.`,
-    handoffBlock,
     buildInstructionsSection(instructions),
-    buildSkillIndex(skillMounts),
-    `## Environnement Paperclip\n\nCes variables sont posées dans l'environnement du shell de cet agent :\n\n\`\`\`\n${envBlock}\n\`\`\`\n\nVariables propres à ce run, lisibles dans le shell quand elles existent : ${MISSION_ENV_VAR_NAMES.join(', ')}. Utilisez \`$PAPERCLIP_TASK_ID\` pour le ticket en cours.\n\n${tokensLine}`,
-    buildPaperclipToolsSection(availability),
+    buildSkillIndex(sortedMounts),
+    buildInvariantEnvironmentSection(),
+    buildInvariantPaperclipToolsSection(),
   ]);
-}
-
-/**
- * Lot 9 — consigne d'usage des outils Paperclip. Mesuré sur ACC-2278 et
- * ACC-2305 : sans elle l'agent fabrique 5 à 11 appels HTTP à la main par run.
- * Le texte nomme aussi l'état réel des outils de connexion, que le gabarit
- * heartbeat de l'hôte (« Connection tools ») cite qu'ils existent ou non.
- */
-function buildPaperclipToolsSection(availability: { paperclip: boolean; connections: boolean }): string {
-  const connections = availability.connections
-    ? '`connections_search` et `connection_request` sont disponibles comme outils pour les consignes « Connection tools ».'
-    : '`connections_search` et `connection_request` ne sont pas disponibles dans ce run : ignorez les consignes « Connection tools » et signalez le besoin d\'accès dans votre commentaire.';
-  if (!availability.paperclip) return `## Outils Paperclip\n\n${connections}`;
-  return [
-    '## Outils Paperclip',
-    '',
-    'Pour lire et modifier les tickets, utilisez les outils `paperclip_*` : le jeton et le run id sont ajoutés automatiquement et les réponses sont compactes. N\'appelez pas l\'API Paperclip depuis le shell.',
-    '- Lire : `paperclip_get_issue` (ticket courant par défaut, commentaires récents, documents), `paperclip_list_comments`, `paperclip_get_document`, `paperclip_list_documents`, `paperclip_list_my_issues`.',
-    '- Écrire : `paperclip_add_comment`, `paperclip_update_issue` (statut + commentaire), `paperclip_write_document`, `paperclip_create_subtask`.',
-    '- Livrer : `paperclip_deliver` publie document + commentaire + statut en un seul appel ; il s\'arrête au premier échec et dit ce qui est fait.',
-    '- Autre route de l\'API : `paperclip_api_request` (chemin relatif à /api).',
-    'Le shell reste l\'outil du reste du travail (fichiers, git, tests).',
-    connections,
-  ].join('\n');
 }
 
 /**
@@ -901,8 +885,19 @@ function buildPaperclipToolsSection(availability: { paperclip: boolean; connecti
  * Le test doit pouvoir vérifier ce qui part (et ce qui ne part pas) dans le
  * transcript du modèle, sans déclencher de run ni d'appel à la passerelle.
  */
-export function buildSystemPromptForTest(ctx: AdapterExecutionContext): string {
-  return buildSystemPrompt(ctx);
+export function buildSystemPromptForTest(
+  ctx: AdapterExecutionContext,
+  instructions: InstructionsBundle | null = null,
+  skillMounts: SkillMount[] = [],
+): string {
+  return buildSystemPrompt(ctx, instructions, skillMounts);
+}
+
+export function buildPromptForTest(
+  ctx: AdapterExecutionContext,
+  options: { resumedSession: boolean } = { resumedSession: false },
+): string {
+  return buildPrompt(ctx, options);
 }
 
 /**

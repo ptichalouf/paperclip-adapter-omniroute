@@ -37,6 +37,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import type { WireMessage } from '../shared/wire.js';
+import { calculateDynamicSessionBudgets } from '../shared/context-window.js';
 import { CONTINUE_PROMPT, FINAL_ANSWER_PROMPT } from './agent-loop.js';
 import { redactSecrets, redactWireMessages } from './secrets-redact.js';
 import { ensurePrivateDir, withSessionLock, writeFileAtomic, type LockOptions } from './session-store.js';
@@ -73,11 +74,7 @@ export function resolveHistoryBudgetChars(
     return Math.floor(userBudgetChars);
   }
   if (typeof modelContextTokens === 'number' && Number.isFinite(modelContextTokens) && modelContextTokens > 0) {
-    const estimatedChars = Math.floor(modelContextTokens * 3.5 * 0.4);
-    return Math.max(
-      DEFAULT_MIN_HISTORY_CHAR_BUDGET,
-      Math.min(DEFAULT_MAX_HISTORY_CHAR_BUDGET, estimatedChars),
-    );
+    return calculateDynamicSessionBudgets(modelContextTokens).historyBudgetChars;
   }
   return DEFAULT_MIN_HISTORY_CHAR_BUDGET;
 }
@@ -95,11 +92,7 @@ export function resolveIntraRunBudgetChars(
     return Math.floor(userBudgetChars);
   }
   if (typeof modelContextTokens === 'number' && Number.isFinite(modelContextTokens) && modelContextTokens > 0) {
-    const estimatedChars = Math.floor(modelContextTokens * 3.5 * 0.5);
-    return Math.max(
-      DEFAULT_MIN_INTRARUN_CHAR_BUDGET,
-      Math.min(DEFAULT_MAX_INTRARUN_CHAR_BUDGET, estimatedChars),
-    );
+    return calculateDynamicSessionBudgets(modelContextTokens).intraRunBudgetChars;
   }
   return DEFAULT_MIN_INTRARUN_CHAR_BUDGET;
 }
