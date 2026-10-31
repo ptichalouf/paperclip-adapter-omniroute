@@ -104,6 +104,20 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
       },
     }));
     fake.onRpcMethod('tools/call', (req) => {
+      // `search_tools` découvre les cibles on-demand ; `run_tool` les lance.
+      if (req.body.params?.name === 'search_tools') {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: '2.0',
+            id: req.body.id,
+            result: {
+              content: [{ type: 'text', text: JSON.stringify({ tools: [{ name: 'github:create_issue' }] }) }],
+              isError: false,
+            },
+          },
+        };
+      }
       callParams = req.body.params;
       return {
         status: 200,
@@ -119,6 +133,13 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
     });
 
     const tools = getTools();
+    // R2 : une cible on-demand doit être DÉCOUVERTE avant d'être exécutée.
+    // Le pont ne devine pas la cible d'un nom inconnu.
+    const searchTool = tools.get('mcp_search_tools')!;
+    const found = await searchTool.run({ query: 'github' });
+    expect(found.isError).toBe(false);
+    expect(found.content).toContain('github:create_issue');
+
     const runTool = tools.get('mcp_run_tool')!;
     const res = await runTool.run({
       tool: 'github:create_issue',
@@ -197,7 +218,14 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
   it('propage isError: true si l’outil amont échoue', async () => {
     fake.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
     fake.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
-    fake.onRpcMethod('tools/list', () => ({ status: 200, body: { jsonrpc: '2.0', id: 2, result: { tools: [] } } }));
+    fake.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: { tools: [{ name: 'github_search', description: 'Search GitHub' }] },
+      },
+    }));
     fake.onRpcMethod('tools/call', (req) => ({
       status: 200,
       body: {
@@ -222,7 +250,14 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
     const hugeOutput = 'X'.repeat(30_000);
     fake.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
     fake.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
-    fake.onRpcMethod('tools/list', () => ({ status: 200, body: { jsonrpc: '2.0', id: 2, result: { tools: [] } } }));
+    fake.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: { tools: [{ name: 'dump_database', description: 'Dump the database' }] },
+      },
+    }));
     fake.onRpcMethod('tools/call', (req) => ({
       status: 200,
       body: {
@@ -247,7 +282,14 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
   it('masque les secrets et tokens dans les sorties d’outils', async () => {
     fake.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
     fake.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
-    fake.onRpcMethod('tools/list', () => ({ status: 200, body: { jsonrpc: '2.0', id: 2, result: { tools: [] } } }));
+    fake.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: { tools: [{ name: 'get_auth_state', description: 'Read auth state' }] },
+      },
+    }));
     fake.onRpcMethod('tools/call', (req) => ({
       status: 200,
       body: {
@@ -289,6 +331,19 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
       },
     }));
     fake.onRpcMethod('tools/call', (req) => {
+      // `search_tools` découvre la cible on-demand ; `run_tool` la lance.
+      if (req.body.params?.name === 'search_tools') {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: '2.0',
+            id: req.body.id,
+            result: {
+              content: [{ type: 'text', text: JSON.stringify({ tools: [{ name: 'virtual_target' }] }) }],
+            },
+          },
+        };
+      }
       virtualCalled = req.body.params;
       return {
         status: 200,
@@ -339,6 +394,7 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
       );
 
       const runTool = toolMap.get('mcp_run_tool')!;
+      const searchTool = toolMap.get('mcp_search_tools')!;
 
       // 1. Exécution de direct_action -> doit appeler direct_action en direct sur fakeDirect
       const resDirect = await runTool.run({ tool: 'direct_action', arguments: { foo: 'bar' } });
@@ -348,7 +404,12 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
         arguments: { foo: 'bar' },
       });
 
-      // 2. Exécution d'un outil virtuel -> doit appeler run_tool sur fake (paperclip-assigned)
+      // 2. Découverte préalable de la cible on-demand (R2 : pas de devinette).
+      const found = await searchTool.run({ query: 'virtual' });
+      expect(found.isError).toBe(false);
+      expect(found.content).toContain('virtual_target');
+
+      // 3. Exécution d'un outil virtuel -> doit appeler run_tool sur fake (paperclip-assigned)
       const resVirtual = await runTool.run({ tool: 'virtual_target', arguments: { num: 42 } });
       expect(resVirtual.isError).toBe(false);
       expect(virtualCalled).toEqual({

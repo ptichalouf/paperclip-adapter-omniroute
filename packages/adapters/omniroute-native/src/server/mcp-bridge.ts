@@ -13,6 +13,13 @@ import type { WireToolSpec } from '../shared/client.js';
 export const DEFAULT_MCP_TIMEOUT_MS = 30_000;
 export const MAX_MCP_OUTPUT_CHARS = 24_000;
 
+/**
+ * Enveloppes virtuelles de la passerelle : ce sont des POINTEURS vers d'autres
+ * outils, jamais des cibles. Elles ne sont donc jamais listées comme outils
+ * exécutables et ne sont jamais résolues comme telles.
+ */
+const VIRTUAL_ENVELOPE_TOOLS = new Set(['search_tools', 'run_tool']);
+
 export interface McpBridgeOptions {
   servers: AdapterRuntimeMcpServer[];
   runId: string;
@@ -31,6 +38,29 @@ export interface DiscoveredMcpTool {
   parametersSchema: Record<string, unknown>;
   risk?: 'read' | 'write';
 }
+
+/** Comment un outil cible est exécuté sur son serveur. */
+export type McpToolMode = 'direct' | 'virtual';
+
+/** Cible d'exécution résolue pour un nom d'outil. */
+export interface McpToolTarget {
+  serverName: string;
+  toolName: string;
+  /**
+   * - `direct` : `tools/call { name: <cible> }` — l'outil est listé par le
+   *   serveur et s'exécute lui-même.
+   * - `virtual` : `tools/call { name: 'run_tool', arguments: { tool } }` — la
+   *   cible est un outil « on-demand remote » que seul `run_tool` sait lancer.
+   */
+  mode: McpToolMode;
+}
+
+/** Résultat de la résolution d'un nom d'outil. */
+export type McpToolResolution =
+  | { kind: 'resolved'; target: McpToolTarget }
+  | { kind: 'ambiguous'; toolName: string; serverNames: string[] }
+  | { kind: 'unknown'; toolName: string; serverHint?: string };
+
 
 /** Client HTTP JSON-RPC 2.0 léger pour passerelle MCP Paperclip. */
 export class McpHttpClient {
@@ -134,7 +164,10 @@ export class McpBridge {
   private catalog: DiscoveredMcpTool[] = [];
   private initialized = false;
   private virtualServers: Set<string> = new Set();
-  private dynamicTools: Map<string, string> = new Map();
+  /** Outil dynamique -> serveurs virtuels qui l'exposent (plusieurs possibles). */
+  private dynamicTools: Map<string, string[]> = new Map();
+  /** Serveur -> noms d'outils qui sont des enveloppes virtuelles (pas des cibles). */
+  private envelopeTools: Map<string, Set<string>> = new Map();
 
   constructor(private readonly options: McpBridgeOptions) {
     for (const server of options.servers) {
@@ -163,7 +196,12 @@ export class McpBridge {
   }
 
   getDynamicToolServer(toolName: string): string | undefined {
-    return this.dynamicTools.get(toolName);
+    return this.dynamicTools.get(toolName)?.[0];
+  }
+
+  /** Serveurs virtuels exposant un outil dynamique (déduit via `search_tools`). */
+  getDynamicToolServers(toolName: string): string[] {
+    return [...(this.dynamicTools.get(toolName) ?? [])];
   }
 
   getCatalog(): DiscoveredMcpTool[] {
@@ -207,6 +245,16 @@ export class McpBridge {
           this.virtualServers.add(serverName);
         }
 
+        // Les enveloppes virtuelles sont des POINTEURS, pas des cibles : on
+        // les mémorise par serveur pour ne jamais les résoudre comme
+        // exécutables (R1).
+        const envelopes = new Set<string>();
+        for (const t of tools) {
+          const name = String(t.name);
+          if (VIRTUAL_ENVELOPE_TOOLS.has(name)) envelopes.add(name);
+        }
+        this.envelopeTools.set(serverName, envelopes);
+
         for (const t of tools) {
           this.catalog.push({
             serverName,
@@ -218,6 +266,12 @@ export class McpBridge {
           });
         }
       } catch (error) {
+        // Un run interrompu n'est pas une dégradation : on le laisse remonter,
+        // sinon l'agent verrait « outil inconnu » au lieu de « run interrompu »
+        // et pourrait croire que l'outil n'existe pas.
+        if (this.options.signal?.aborted) {
+          throw error;
+        }
         console.warn(`[omniroute_native] Impossible d'initialiser le serveur MCP ${serverName} :`, error);
       }
     }
@@ -269,7 +323,10 @@ export class McpBridge {
             parametersSchema: (t.inputSchema ?? t.parametersSchema ?? { type: 'object', properties: {} }) as Record<string, unknown>,
             risk: t.risk === 'write' ? 'write' : 'read',
           };
-          this.dynamicTools.set(discovered.name, serverName);
+          this.dynamicTools.set(
+            discovered.name,
+            [...new Set([...(this.dynamicTools.get(discovered.name) ?? []), serverName])],
+          );
           results.push(discovered);
         }
       } catch (err) {
@@ -277,9 +334,21 @@ export class McpBridge {
       }
     }
 
-    // 2. Recherche locale parmi les serveurs directs (non virtuels)
+    // 2. Recherche locale parmi les outils DIRECTS.
+    //
+    // R1 : un serveur qui expose les enveloppes virtuelles (`search_tools` /
+    // `run_tool`) expose aussi des outils directs — c'est la topologie de
+    // production (un seul serveur `paperclip-assigned`). Filtrer le catalogue
+    // par « serveur virtuel » rendait ces outils directs INATTEIGNABLES :
+    // invisibles à la recherche, et rejetés à l'exécution parce que
+    // `run_tool` n'accepte que les outils « on-demand remote ».
+    //
+    // On ne retire donc du catalogue que les ENVELOPPES virtuelles, qui sont
+    // des pointeurs et jamais des cibles exécutables.
     const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
-    const directTools = this.catalog.filter((tool) => !this.virtualServers.has(tool.serverName));
+    const directTools = this.catalog.filter(
+      (tool) => !VIRTUAL_ENVELOPE_TOOLS.has(tool.name),
+    );
     const matchedDirect = directTools.filter((tool) => {
       if (!q) return true;
       return [
@@ -303,6 +372,83 @@ export class McpBridge {
     }
 
     return { tools: uniqueTools };
+  }
+
+  /**
+   * Résout un nom d'outil vers une cible d'exécution UNIQUE.
+   *
+   * Règles (issues du contrat upstream relu) :
+   * 1. Un outil listé par `tools/list` s'exécute en DIRECT sur son serveur :
+   *    `tools/call { name: <cible> }`. C'est le cas des outils de connexion et
+   *    des quatre outils de contexte `paperclip_*` — y compris quand ils
+   *    cohabitent sur un serveur qui expose aussi `search_tools`/`run_tool`.
+   * 2. Un outil découvert par `search_tools` est « on-demand remote » : seul
+   *    `run_tool` sait le lancer (`tools/call { name: 'run_tool' }`).
+   * 3. Un nom inconnu, ou exposé par plusieurs serveurs, ne doit JAMAIS
+   *    changer de cible en silence : on refuse explicitement (R2).
+   */
+  resolveTool(toolName: string, serverHint?: string): McpToolResolution {
+    const catalogMatches = this.catalog.filter((t) => t.name === toolName);
+
+    // Un serveur nommé explicitement lève l'ambiguïté : il doit porter
+    // l'outil demandé, sinon on refuse plutôt que de deviner.
+    if (serverHint) {
+      const hinted = catalogMatches.filter((t) => t.serverName === serverHint);
+      if (hinted.length === 0) {
+        const dynamicOnHint = this.dynamicTools.get(toolName)?.includes(serverHint);
+        if (dynamicOnHint) {
+          return {
+            kind: 'resolved',
+            target: { serverName: serverHint, toolName, mode: 'virtual' },
+          };
+        }
+        return { kind: 'unknown', toolName, serverHint };
+      }
+      const direct = hinted.find((t) => !this.envelopeTools.get(t.serverName)?.has(t.name));
+      if (direct) {
+        return {
+          kind: 'resolved',
+          target: { serverName: direct.serverName, toolName: direct.name, mode: 'direct' },
+        };
+      }
+      // L'outil est une enveloppe virtuelle : ce n'est pas une cible.
+      return { kind: 'unknown', toolName, serverHint };
+    }
+
+    // 1. Cible directe : l'outil est listé par un serveur.
+    if (catalogMatches.length > 0) {
+      const directMatches = catalogMatches.filter(
+        (t) => !this.envelopeTools.get(t.serverName)?.has(t.name),
+      );
+      if (directMatches.length === 1) {
+        const direct = directMatches[0];
+        return {
+          kind: 'resolved',
+          target: { serverName: direct.serverName, toolName: direct.name, mode: 'direct' },
+        };
+      }
+      if (directMatches.length > 1) {
+        const serverNames = [...new Set(directMatches.map((t) => t.serverName))].sort();
+        return { kind: 'ambiguous', toolName, serverNames };
+      }
+      // Le nom ne désigne qu'une enveloppe virtuelle : pas une cible.
+      return { kind: 'unknown', toolName };
+    }
+
+    // 2. Cible dynamique : découverte via `search_tools` sur un serveur virtuel.
+    const dynamicServers = this.dynamicTools.get(toolName) ?? [];
+    if (dynamicServers.length === 1) {
+      return {
+        kind: 'resolved',
+        target: { serverName: dynamicServers[0], toolName, mode: 'virtual' },
+      };
+    }
+    if (dynamicServers.length > 1) {
+      return { kind: 'ambiguous', toolName, serverNames: [...dynamicServers].sort() };
+    }
+
+    // 3. Nom inconnu : aucun repli silencieux vers un serveur arbitraire (R2).
+    return { kind: 'unknown', toolName };
   }
 }
 
@@ -347,6 +493,12 @@ const RUN_TOOL_SPEC: WireToolSpec = {
       arguments: {
         type: 'object',
         description: 'Les arguments de l’outil, conformes à son schéma.',
+      },
+      server: {
+        type: 'string',
+        description:
+          'Serveur MCP cible, uniquement si le même outil est exposé par plusieurs serveurs. ' +
+          'Laissez vide pour la résolution automatique.',
       },
     },
     required: ['tool'],
@@ -422,42 +574,64 @@ export function buildMcpBridgeTools(options: McpBridgeOptions): WorkspaceTool[] 
 
         await bridge.ensureDiscovered();
 
-        const catalog = bridge.getCatalog();
-        const toolEntry = catalog.find((t) => t.name === toolName);
-        let targetServerName: string | undefined = toolEntry?.serverName;
+        // Résolution EXPLICITE de la cible (R2) : jamais de repli silencieux
+        // vers `paperclip-assigned` ou le premier serveur, qui enverrait un
+        // nom d'outil à un serveur qui ne le possède pas.
+        const serverHint = typeof record.server === 'string' ? record.server.trim() : undefined;
+        const resolution = bridge.resolveTool(toolName, serverHint || undefined);
 
-        if (!targetServerName) {
-          targetServerName = bridge.getDynamicToolServer(toolName);
+        if (resolution.kind === 'unknown') {
+          const servers = bridge.getCatalog().map((t) => t.serverName);
+          const hint = serverHint
+            ? ` sur le serveur « ${serverHint} »`
+            : '';
+          const known = servers.length > 0
+            ? ` Serveurs MCP configurés : ${[...new Set(servers)].join(', ')}.`
+            : ' Aucun serveur MCP n\'a découvert d\'outil.';
+          return {
+            content: redactor(
+              `Outil inconnu : « ${toolName} »${hint} n'est exposé par aucun serveur MCP configuré. Rien n'a été exécuté.${known}`,
+            ),
+            isError: true,
+          };
         }
 
-        let client: McpHttpClient | undefined;
-        if (targetServerName) {
-          client = bridge.getClient(targetServerName);
+        if (resolution.kind === 'ambiguous') {
+          return {
+            content: redactor(
+              `Outil ambigu : « ${toolName} » est exposé par plusieurs serveurs MCP (${resolution.serverNames.join(', ')}). ` +
+              `Précisez « server » avec l'un de ces serveurs. Rien n'a été exécuté.`,
+            ),
+            isError: true,
+          };
         }
+
+        const target = resolution.target;
+        const client = bridge.getClient(target.serverName);
         if (!client) {
-          client = bridge.getClient('paperclip-assigned') ?? bridge.getDefaultClient();
-          if (client) {
-            targetServerName = client.server.name;
-          }
+          return {
+            content: redactor(
+              `Outil « ${toolName} » : le serveur MCP « ${target.serverName} » n'est plus joignable. Rien n'a été exécuté.`,
+            ),
+            isError: true,
+          };
         }
-        if (!client) {
-          return { content: 'Aucun serveur MCP configuré pour exécuter cet outil.', isError: true };
-        }
-
-        const isVirtual = targetServerName ? bridge.hasNativeVirtualTools(targetServerName) : bridge.hasNativeVirtualTools();
 
         let rawResult: any;
-        if (isVirtual) {
+        if (target.mode === 'virtual') {
+          // Cible on-demand : seul `run_tool` sait la lancer.
           rawResult = await client.callRpc<any>('tools/call', {
             name: 'run_tool',
             arguments: {
-              tool: toolName,
+              tool: target.toolName,
               arguments: toolArgs,
             },
           });
         } else {
+          // Outil listé par `tools/list` : appel direct, y compris sur un
+          // serveur qui expose aussi `search_tools`/`run_tool` (R1).
           rawResult = await client.callRpc<any>('tools/call', {
-            name: toolName,
+            name: target.toolName,
             arguments: toolArgs,
           });
         }
