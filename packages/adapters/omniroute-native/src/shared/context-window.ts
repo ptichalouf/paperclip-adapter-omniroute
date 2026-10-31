@@ -138,7 +138,10 @@ export async function loadRemoteModelContext(
     candidates.push(`claude/${modelId}`, `openai/${modelId}`, `deepseek/${modelId}`, `minimax/${modelId}`, `qwen/${modelId}`);
   }
 
+  const timeoutSignal = AbortSignal.timeout(3_000);
+  const discoverySignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   for (const candidate of candidates) {
+    if (discoverySignal.aborted) break;
     const encoded = encodeURIComponent(candidate);
     const url = `${baseUrl.replace(/\/+$/, '')}/v1/models/${encoded}`;
     try {
@@ -149,7 +152,7 @@ export async function loadRemoteModelContext(
           accept: 'application/json',
           'User-Agent': 'omniroute-native/1.0 (sdk-cli; Paperclip-Agent)',
         },
-        signal: signal ?? AbortSignal.timeout(3_000),
+        signal: discoverySignal,
       });
 
       if (!response.ok) continue;

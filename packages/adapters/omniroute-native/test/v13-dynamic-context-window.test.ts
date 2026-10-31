@@ -102,6 +102,20 @@ describe('v1.3 — Dynamic Context Window & Memory Budgets', () => {
   });
 
   describe('loadRemoteModelContext', () => {
+    it('borne la découverte même avec un signal de run non annulé', async () => {
+      const controller = new AbortController();
+      vi.stubGlobal('fetch', vi.fn((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+        const signal = init.signal!;
+        if (signal.aborted) return reject(signal.reason);
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      })));
+      const started = Date.now();
+      const spec = await loadRemoteModelContext('http://gateway.test', 'test-key', 'unknown-timeout-test', controller.signal);
+      expect(spec.source).toBe('default_fallback');
+      expect(Date.now() - started).toBeLessThan(4_000);
+      expect(controller.signal.aborted).toBe(false);
+    }, 4_500);
+
     it('résout immédiatement sans appel réseau si le modèle est dans le catalogue', async () => {
       const fetchSpy = vi.fn();
       vi.stubGlobal('fetch', fetchSpy);
