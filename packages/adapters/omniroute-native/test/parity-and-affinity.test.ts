@@ -49,10 +49,12 @@ describe('Lot 4 — Parité hôte et optimisations passerelle', () => {
       expect(getFreshSessionHandoff).toHaveBeenCalledOnce();
       expect((ctx.context as Record<string, unknown>)['paperclipFreshSessionHandoffMarkdown']).toBe(handoffText);
 
-      // Vérifie que le prompt envoyé à la passerelle contient bien le handoff
+      // Vérifie que le prompt envoyé à la passerelle contient bien le handoff dans le message utilisateur (v1.3 invariant system)
       const firstReq = gateway.captured[0];
-      expect(firstReq?.system).toContain('## Passation de session précédente');
-      expect(firstReq?.system).toContain(handoffText);
+      expect(firstReq?.system).not.toContain('## Passation de session précédente');
+      const userMessage = JSON.stringify(firstReq?.messages ?? []);
+      expect(userMessage).toContain('## Passation de session précédente');
+      expect(userMessage).toContain(handoffText);
     } finally {
       await gateway.close();
       rmSync(cwd, { recursive: true, force: true });

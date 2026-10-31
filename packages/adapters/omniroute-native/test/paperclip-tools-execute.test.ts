@@ -45,12 +45,14 @@ describe('lot 9 — prompt système', () => {
     expect(prompt).not.toContain(TOKEN);
   });
 
-  it('dit que connections_search / connection_request sont absents quand l’hôte ne les fournit pas', () => {
+  it('annonce les consignes des outils de connexion de façon universelle et stable sans le bearer', () => {
     const prompt = buildSystemPromptForTest(promptCtx());
-    expect(prompt).toMatch(/connections_search[^\n]*(pas disponibles|indisponibles)/);
+    expect(prompt).toContain('connections_search');
+    expect(prompt).toContain('connection_request');
+    expect(prompt).not.toContain(TOKEN);
   });
 
-  it('annonce les outils de connexion quand l’hôte les fournit, sans le bearer', () => {
+  it('garde le même prompt système même quand des runtimeTools sont configurés, sans jamais fuiter le bearer', () => {
     const prompt = buildSystemPromptForTest(promptCtx({
       runtimeTools: {
         version: 1,
@@ -65,7 +67,7 @@ describe('lot 9 — prompt système', () => {
         tools: ['connections_search', 'connection_request'],
       },
     }));
-    expect(prompt).not.toMatch(/connections_search[^\n]*(pas disponibles|indisponibles)/);
+    expect(prompt).toBe(buildSystemPromptForTest(promptCtx()));
     expect(prompt).toContain('connections_search');
     expect(prompt).not.toContain(RT_TOKEN);
   });
