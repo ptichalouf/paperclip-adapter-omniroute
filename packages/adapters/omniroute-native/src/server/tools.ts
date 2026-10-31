@@ -69,6 +69,8 @@ const IGNORED_DIR_SEGMENTS: readonly string[] = [
 export interface ToolResult {
   content: string;
   isError: boolean;
+  /** Signal d'attente humaine (cartes de décision v1.2) : clôture immédiatement la boucle. */
+  waitingForHuman?: boolean;
 }
 
 export interface WorkspaceTool {

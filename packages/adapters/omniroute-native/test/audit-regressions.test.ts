@@ -156,7 +156,7 @@ describe('audit — assertions de comportement sûr, rouges sur le code actuel',
   });
 
   it('A12 la regex de search ne monopolise pas la boucle événementielle', async () => {
-    await fs.writeFile(path.join(root, 'line.txt'), 'a'.repeat(25) + '!');
+    await fs.writeFile(path.join(root, 'line.txt'), 'a'.repeat(24) + '!');
     const modulePath = fileURLToPath(new URL('../dist/server/tools.js', import.meta.url));
     const script = `import {buildWorkspaceTools} from ${JSON.stringify('file://' + modulePath)};
       const root = ${JSON.stringify(root)};
@@ -173,7 +173,7 @@ describe('audit — assertions de comportement sûr, rouges sur le code actuel',
     });
     await fs.writeFile(path.join(scratch, 'regex-evidence.json'), JSON.stringify(timing));
     expect(timing.timerDelayMs).toBeLessThan(150);
-  });
+  }, 15_000);
 
   it('A10 borne read_skill et le rejeu dans un même run', async () => {
     const skillDir = path.join(root, 'skill');

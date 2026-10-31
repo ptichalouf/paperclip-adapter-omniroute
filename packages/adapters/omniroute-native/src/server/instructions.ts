@@ -125,7 +125,7 @@ export function buildInstructionsSection(bundle: InstructionsBundle | null): str
   if (bundle.truncated) {
     lines.push(
       '',
-      `_Note : l'instruction a été tronquée à ${MAX_INSTRUCTIONS_CHARS} caractères (longueur réelle : ${bundle.originalLength}). Les fichiers de référence sont dans \`${bundle.dir}\`._`,
+      `_Note : l'instruction a été tronquée à ${MAX_INSTRUCTIONS_CHARS} caractères (longueur réelle : ${bundle.originalLength}). Les fichiers de référence sont accessibles via l'outil de lecture d'instructions._`,
     );
   }
   return lines.join('\n');

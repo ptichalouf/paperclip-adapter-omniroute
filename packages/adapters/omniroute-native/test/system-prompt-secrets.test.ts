@@ -37,11 +37,12 @@ describe('buildSystemPrompt — aucun secret dans le prompt', () => {
     expect(prompt).not.toContain('SECRET-TOOLS-BEARER-0002');
   });
 
-  it('annonce malgré tout les variables utiles au modèle', () => {
+  it('annonce les variables d infrastructure de façon invariante sans valeurs dynamiques', () => {
     const prompt = buildSystemPromptForTest(contextWithSecrets());
-    expect(prompt).toContain('PAPERCLIP_RUNTIME_TOOLS_MCP_URL');
-    expect(prompt).toContain('PAPERCLIP_RUNTIME_TOOLS_AVAILABLE');
-    expect(prompt).toContain('gitea');
+    expect(prompt).toContain('PAPERCLIP_API_URL');
+    expect(prompt).toContain('PAPERCLIP_AGENT_ID');
+    expect(prompt).toContain('PAPERCLIP_TASK_ID');
+    expect(prompt).not.toContain('gitea');
   });
 
   it('présente une liste blanche : une variable inconnue n’est pas annoncée', () => {
