@@ -80,6 +80,7 @@ import {
   paperclipToolsAvailability,
   paperclipToolsOptionsFromEnv,
 } from './paperclip-tools.js';
+import { buildMcpBridgeTools } from './mcp-bridge.js';
 
 export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteExecutionResult> {
   // Le serveur fournit `onProviderStopped`, que les types de la version liée
@@ -211,12 +212,27 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
   void loadRemoteModelPricing(config.baseUrl, config.apiKey ?? '', config.model).catch(() => undefined);
   const model = selectModel(config);
 
+  const mcpServers = (context.runtimeMcp ?? (ctx as { runtimeMcp?: { getServers(): any[] } }).runtimeMcp)?.getServers() ?? [];
+  const mcpTokensRecord: Record<string, string> = {};
+  for (let i = 0; i < mcpServers.length; i++) {
+    const s = mcpServers[i];
+    if (s && typeof s.token === 'string' && s.token.trim().length > 0) {
+      mcpTokensRecord[`MCP_TOKEN_${i}_${s.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`] = s.token;
+    }
+  }
+
   // Lot sécu (ACC-2300) : valeurs secrètes connues du run (jeton de run, clé
-  // de la passerelle, variables secrètes du shell et du conteneur), masquées
+  // de la passerelle, jetons serveurs MCP, variables secrètes du shell et du conteneur), masquées
   // partout — sorties d'outils, transcript, fichier de session.
-  const redact = createRedactor(
-    collectSecretValues(agentShellEnv(ctx), process.env, { OMNIROUTE_API_KEY: config.apiKey }),
-  );
+  const redact = createRedactor([
+    ...collectSecretValues(
+      agentShellEnv(ctx),
+      process.env,
+      { OMNIROUTE_API_KEY: config.apiKey },
+      mcpTokensRecord,
+    ),
+    ...mcpServers.map((s: any) => s.token).filter((t: any): t is string => typeof t === 'string'),
+  ]);
   const emit = async (entry: TranscriptEntry): Promise<void> => {
     // Masquage champ par champ, jamais sur le JSON sérialisé (un `\"` coupé
     // casserait la ligne de transcript).
@@ -322,12 +338,31 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
     );
   }
 
+  if (mcpServers.length > 0) {
+    await log(
+      'stdout',
+      `[omniroute_native] ${mcpServers.length} serveur(s) MCP connecté(s) : ${mcpServers.map((s: any) => s.name).join(', ')}`,
+    );
+  }
+  const mcpBridgeTools = mcpServers.length > 0
+    ? buildMcpBridgeTools({
+        servers: mcpServers,
+        runId: ctx.runId,
+        agentId: ctx.agent.id,
+        companyId: ctx.agent.companyId,
+        signal,
+        timeoutMs: config.timeoutSec ? Math.min(30_000, config.timeoutSec * 1000) : 30_000,
+        redactSecrets: redact,
+      })
+    : [];
+
   const shellEnv = agentShellEnv(ctx);
   const tools = [
     ...buildWorkspaceTools(workspaceCwd, signal, shellEnv),
     // Lot 9 — outils Paperclip directs : même source que le shell (URL,
     // identité, run id, jeton de run), jeton jamais renvoyé au modèle.
     ...buildPaperclipTools(paperclipToolsOptionsFromEnv(shellEnv, signal)),
+    ...mcpBridgeTools,
     ...(skillMounts.length > 0 ? [buildReadSkillTool(skillMounts)] : []),
     ...(instructions ? [buildReadInstructionsTool(instructions)].filter((t) => t !== null) : []),
   ];
@@ -851,7 +886,8 @@ function buildInvariantPaperclipToolsSection(): string {
     'Pour lire et modifier les tickets, utilisez prioritairement les outils `paperclip_*` :',
     '- Lire : `paperclip_get_issue` (ticket courant par défaut), `paperclip_list_comments`, `paperclip_get_document`, `paperclip_list_documents`.',
     '- Écrire : `paperclip_add_comment`, `paperclip_update_issue`, `paperclip_write_document`, `paperclip_create_subtask`.',
-    '- Livrer : `paperclip_deliver` (publie document + commentaire + statut en un seul appel atomique).',
+    '- Décider, si exposés : `paperclip_ask_user` (questions structurées), `paperclip_request_confirmation` (approbation d’un plan). Après une carte réussie, attendre la réponse humaine sans autre outil ni synthèse.',
+    '- Livrer : `paperclip_deliver` publie document + commentaire + statut séquentiellement ; il s’arrête au premier échec et indique ce qui a été fait.',
     '- Autre route d\'API : `paperclip_api_request`.',
     'Lorsque les outils `connections_search` et `connection_request` sont présents dans la liste d\'outils, utilisez-les pour les interactions de connexion ; sinon, signalez le besoin d\'accès en commentaire.',
     'Le shell reste réservé aux opérations locales (fichiers du workspace, git, scripts de validation).',
@@ -864,6 +900,17 @@ function buildInvariantPaperclipToolsSection(): string {
  * Garanti strictement identique entre tous les runs d'un agent.
  * Aucune note de passation, aucun horodatage, aucun état dynamique d'outils.
  */
+function buildMcpToolsSection(): string {
+  return [
+    '## Outils MCP et Connexions d’Entreprise',
+    '',
+    'Lorsque `mcp_search_tools` et `mcp_run_tool` sont exposés, utilisez-les pour les outils d’entreprise via la passerelle Paperclip ; sinon, signalez le besoin d’accès sans inventer d’appel.',
+    '- Utilisez `mcp_search_tools` pour trouver les outils disponibles par mot-clé (ex: "github", "cloudflare", "sql").',
+    '- Utilisez `mcp_run_tool` avec le nom de l’outil et ses arguments pour l’exécuter.',
+    'N’inventez pas de nom d’outil : cherchez d’abord avant d’exécuter.',
+  ].join('\n');
+}
+
 function buildSystemPrompt(
   ctx: AdapterExecutionContext,
   instructions: InstructionsBundle | null = null,
@@ -881,6 +928,7 @@ function buildSystemPrompt(
     buildSkillIndex(sortedMounts),
     buildInvariantEnvironmentSection(),
     buildInvariantPaperclipToolsSection(),
+    buildMcpToolsSection(),
   ]);
 }
 
