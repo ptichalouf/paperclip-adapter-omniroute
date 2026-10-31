@@ -50,10 +50,15 @@ export const ASK_USER_TOOL_SCHEMA = {
             type: 'string',
             description: 'Texte complet de la question.',
           },
+          selectionMode: {
+            type: 'string',
+            enum: ['single', 'multi'],
+            description: 'Mode de sélection : single (choix unique) ou multi (choix multiple). Défaut : single.',
+          },
           answerMode: {
             type: 'string',
             enum: ['single_select', 'multi_select', 'text'],
-            description: 'Mode de réponse : choix unique, choix multiple, ou texte libre (défaut : single_select).',
+            description: 'Mode de réponse alternatif : choix unique, choix multiple, ou texte libre (défaut : single_select).',
           },
           required: {
             type: 'boolean',
@@ -61,18 +66,23 @@ export const ASK_USER_TOOL_SCHEMA = {
           },
           options: {
             type: 'array',
-            description: 'Choix proposés (obligatoire si answerMode != "text", min 2 options).',
+            description: 'Choix proposés (obligatoire si non texte libre, min 2 options).',
             items: {
               type: 'object',
               properties: {
                 id: { type: 'string', description: 'Valeur technique retournée.' },
                 label: { type: 'string', description: 'Libellé affiché sur le bouton/case.' },
                 description: { type: 'string', description: 'Explication complémentaire sous le libellé.' },
+                freeText: { type: 'boolean', description: 'Si true, la sélection ouvre un champ texte libre.' },
               },
               required: ['id', 'label'],
             },
           },
           customAnswer: {
+            type: 'boolean',
+            description: 'Permettre à l’utilisateur de saisir une réponse libre personnalisée ("Autre").',
+          },
+          allowOther: {
             type: 'boolean',
             description: 'Permettre à l’utilisateur de saisir une réponse libre personnalisée ("Autre").',
           },
@@ -171,18 +181,34 @@ function describeError(toolName: string, error: unknown): string {
   return `Échec de ${toolName} : ${errorText(error)}`;
 }
 
-interface NormalizedQuestionOption {
+interface StorageQuestionOption {
+  id: string;
+  label: string;
+  description?: string;
+  freeText?: boolean;
+}
+
+interface StorageQuestion {
+  id: string;
+  prompt: string;
+  selectionMode: 'single' | 'multi';
+  required?: boolean;
+  allowOther?: boolean;
+  options: StorageQuestionOption[];
+}
+
+interface CanonicalQuestionOption {
   id: string;
   label: string;
   description?: string;
 }
 
-interface NormalizedQuestion {
+interface CanonicalQuestion {
   id: string;
   prompt: string;
   answerMode: 'single_select' | 'multi_select' | 'text';
   required: boolean;
-  options?: NormalizedQuestionOption[];
+  options?: CanonicalQuestionOption[];
   customAnswer?: {
     enabled: boolean;
     label?: string;
@@ -257,7 +283,8 @@ export function buildDecisionCardTools(
         }
 
         const questionIds = new Set<string>();
-        const normalizedQuestions: NormalizedQuestion[] = [];
+        const storageQuestions: StorageQuestion[] = [];
+        const canonicalQuestions: CanonicalQuestion[] = [];
 
         for (const raw of rawQuestions) {
           if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -274,31 +301,62 @@ export function buildDecisionCardTools(
           const prompt = optString(q, 'prompt');
           if (!prompt) throw new InputError(`La question « ${qId} » doit avoir un « prompt » non vide`);
 
-          const answerModeRaw = optString(q, 'answerMode') ?? 'single_select';
-          if (!['single_select', 'multi_select', 'text'].includes(answerModeRaw)) {
-            throw new InputError(
-              `Mode de réponse invalide « ${answerModeRaw} » pour la question « ${qId} » (valeurs : single_select, multi_select, text)`,
-            );
-          }
-          const answerMode = answerModeRaw as 'single_select' | 'multi_select' | 'text';
+          const rawSelectionMode = optString(q, 'selectionMode');
+          const rawAnswerMode = optString(q, 'answerMode');
+          const isText = rawAnswerMode === 'text' || (!q['options'] && !rawSelectionMode);
+          const isMulti = rawSelectionMode === 'multi' || rawAnswerMode === 'multi_select';
+          const selectionMode: 'single' | 'multi' = isMulti ? 'multi' : 'single';
           const required = typeof q['required'] === 'boolean' ? q['required'] : true;
 
-          const nq: NormalizedQuestion = {
-            id: qId,
-            prompt,
-            answerMode,
-            required,
-          };
+          if (isText) {
+            const rawOptions = Array.isArray(q['options']) ? q['options'] : [];
+            let freeTextOpt: StorageQuestionOption | null = null;
+            if (rawOptions.length > 0 && typeof rawOptions[0] === 'object' && rawOptions[0]) {
+              const optRec = rawOptions[0] as Record<string, unknown>;
+              const optId = optString(optRec, 'id') || 'paperclip_text_answer';
+              const optLabel = optString(optRec, 'label') || 'Réponse libre';
+              const optDesc = optString(optRec, 'description');
+              freeTextOpt = {
+                id: optId,
+                label: optLabel,
+                ...(optDesc ? { description: optDesc } : {}),
+                freeText: true,
+              };
+            } else {
+              freeTextOpt = {
+                id: 'paperclip_text_answer',
+                label: 'Réponse libre',
+                freeText: true,
+              };
+            }
 
-          if (answerMode !== 'text') {
+            storageQuestions.push({
+              id: qId,
+              prompt,
+              selectionMode: 'single',
+              required,
+              allowOther: true,
+              options: [freeTextOpt],
+            });
+
+            canonicalQuestions.push({
+              id: qId,
+              prompt,
+              answerMode: 'text',
+              required,
+            });
+          } else {
             const rawOptions = q['options'];
-            if (!Array.isArray(rawOptions) || rawOptions.length < 2) {
+            if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
               throw new InputError(
-                `La question « ${qId} » (${answerMode}) doit proposer au moins 2 options.`,
+                `La question « ${qId} » doit comporter des options ou être en texte libre (answerMode: 'text').`,
               );
             }
+
             const optionIds = new Set<string>();
-            const optionsList: NormalizedQuestionOption[] = [];
+            const choices: CanonicalQuestionOption[] = [];
+            let freeTextOption: StorageQuestionOption | null = null;
+
             for (const opt of rawOptions) {
               if (!opt || typeof opt !== 'object' || Array.isArray(opt)) {
                 throw new InputError(`Options invalides pour la question « ${qId} »`);
@@ -313,32 +371,103 @@ export function buildDecisionCardTools(
                 throw new InputError(`Identifiant d’option dupliqué « ${optId} » dans la question « ${qId} »`);
               }
               optionIds.add(optId);
+
               const optDesc = optString(optRec, 'description');
-              optionsList.push({
-                id: optId,
-                label: optLabel,
-                ...(optDesc ? { description: optDesc } : {}),
-              });
+              const isFreeText = optRec['freeText'] === true;
+
+              if (isFreeText) {
+                if (freeTextOption) {
+                  throw new InputError(`Une question ne peut comporter qu'une seule option freeText (« ${qId} »)`);
+                }
+                freeTextOption = {
+                  id: optId,
+                  label: optLabel,
+                  ...(optDesc ? { description: optDesc } : {}),
+                  freeText: true,
+                };
+              } else {
+                choices.push({
+                  id: optId,
+                  label: optLabel,
+                  ...(optDesc ? { description: optDesc } : {}),
+                });
+              }
             }
-            nq.options = optionsList;
-          }
 
-          if (q['customAnswer'] === true) {
-            nq.customAnswer = {
-              enabled: true,
-              label: 'Autre choix',
-              placeholder: 'Saisir un autre choix...',
-            };
-          } else if (q['customAnswer'] && typeof q['customAnswer'] === 'object') {
-            const ca = q['customAnswer'] as Record<string, unknown>;
-            nq.customAnswer = {
-              enabled: ca['enabled'] !== false,
-              label: optString(ca, 'label') ?? 'Autre choix',
-              placeholder: optString(ca, 'placeholder') ?? 'Saisir un autre choix...',
-            };
-          }
+            // Si c'est un pur free-text sous forme d'option unique
+            if (choices.length === 0 && freeTextOption) {
+              storageQuestions.push({
+                id: qId,
+                prompt,
+                selectionMode: 'single',
+                required,
+                allowOther: true,
+                options: [freeTextOption],
+              });
+              canonicalQuestions.push({
+                id: qId,
+                prompt,
+                answerMode: 'text',
+                required,
+              });
+              continue;
+            }
 
-          normalizedQuestions.push(nq);
+            // Question à choix : minimum 2 choix
+            if (choices.length < 2) {
+              throw new InputError(
+                `La question « ${qId} » (${selectionMode}) doit proposer au moins 2 options.`,
+              );
+            }
+
+            const hasCustomAnswer =
+              q['customAnswer'] === true ||
+              Boolean(q['allowOther']) ||
+              (q['customAnswer'] &&
+                typeof q['customAnswer'] === 'object' &&
+                (q['customAnswer'] as Record<string, unknown>)['enabled'] !== false) ||
+              freeTextOption !== null;
+
+            if (hasCustomAnswer && !freeTextOption) {
+              let label = 'Autre choix';
+              let placeholder: string | undefined = 'Saisir un autre choix...';
+              if (q['customAnswer'] && typeof q['customAnswer'] === 'object') {
+                const ca = q['customAnswer'] as Record<string, unknown>;
+                label = optString(ca, 'label') ?? 'Autre choix';
+                placeholder = optString(ca, 'placeholder') ?? 'Saisir un autre choix...';
+              }
+              freeTextOption = {
+                id: 'paperclip_custom_answer',
+                label,
+                ...(placeholder ? { description: placeholder } : {}),
+                freeText: true,
+              };
+            }
+
+            const allStorageOptions: StorageQuestionOption[] = freeTextOption
+              ? [...choices, freeTextOption]
+              : choices;
+
+            storageQuestions.push({
+              id: qId,
+              prompt,
+              selectionMode,
+              required,
+              allowOther: Boolean(hasCustomAnswer),
+              options: allStorageOptions,
+            });
+
+            canonicalQuestions.push({
+              id: qId,
+              prompt,
+              answerMode: isMulti ? 'multi_select' : 'single_select',
+              required,
+              options: choices,
+              ...(hasCustomAnswer && freeTextOption
+                ? { customAnswer: { enabled: true, label: freeTextOption.label } }
+                : {}),
+            });
+          }
         }
 
         // Garde-fou anti-cumul : vérification préalable des interactions existantes
@@ -366,7 +495,7 @@ export function buildDecisionCardTools(
             .replace(/^-+|-+$/g, '')
             .slice(0, 32);
           const qHash = createHash('sha256')
-            .update(title + ':' + normalizedQuestions.map((q) => q.id).join(','))
+            .update(title + ':' + storageQuestions.map((q) => q.id).join(','))
             .digest('hex')
             .slice(0, 10);
           idempotencyKey = `questions:${issueId}:${slug || 'q'}:${qHash}:v1`;
@@ -380,12 +509,13 @@ export function buildDecisionCardTools(
           continuationPolicy: 'wake_assignee',
           payload: {
             version: 1,
+            title,
             questionSet: {
               schema: 'paperclip.question_set.v1',
               title,
-              questions: normalizedQuestions,
+              questions: canonicalQuestions,
             },
-            questions: normalizedQuestions,
+            questions: storageQuestions,
           },
         };
 
@@ -412,7 +542,7 @@ export function buildDecisionCardTools(
         } catch (error) {
           if (interactionId) {
             try {
-              await api.request('POST', `/issues/${enc(issueId)}/interactions/${enc(interactionId)}/cancel`, {
+              await api.request('POST', `/issues/${enc(issueId)}/interactions/${enc(interactionId)}/withdraw`, {
                 body: { reason: 'Échec de synchronisation de la posture in_review' },
               });
             } catch {
@@ -545,7 +675,7 @@ export function buildDecisionCardTools(
         } catch (error) {
           if (interactionId) {
             try {
-              await api.request('POST', `/issues/${enc(issueId)}/interactions/${enc(interactionId)}/cancel`, {
+              await api.request('POST', `/issues/${enc(issueId)}/interactions/${enc(interactionId)}/withdraw`, {
                 body: { reason: 'Échec de synchronisation de la posture in_review' },
               });
             } catch {

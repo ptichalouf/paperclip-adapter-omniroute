@@ -43,8 +43,8 @@ async function runTool(name: string, input: unknown, overrides: Partial<Papercli
   return tool.run(input);
 }
 
-describe('TC-DEC-01 — Schéma valide paperclip_ask_user (single_select)', () => {
-  it('construit questionSet.v1 et questions compatibles Zod, et passe en in_review', async () => {
+describe('TC-DEC-01 — Schéma valide paperclip_ask_user (single_select & selectionMode)', () => {
+  it('construit questions avec selectionMode single et options compatibles Zod, et passe en in_review', async () => {
     let interactionPosted: any = null;
     let issuePatched: any = null;
 
@@ -64,7 +64,7 @@ describe('TC-DEC-01 — Schéma valide paperclip_ask_user (single_select)', () =
         {
           id: 'embedding_provider',
           prompt: 'Quel modèle d’embedding souhaitez-vous utiliser ?',
-          answerMode: 'single_select',
+          selectionMode: 'single',
           required: true,
           options: [
             { id: 'qwen_local', label: 'Qwen local (DGX Spark)', description: 'Gratuit et local.' },
@@ -91,27 +91,108 @@ describe('TC-DEC-01 — Schéma valide paperclip_ask_user (single_select)', () =
     expect(interactionPosted.continuationPolicy).toBe('wake_assignee');
     expect(interactionPosted.payload.version).toBe(1);
 
-    // questionSet canonique v1
+    // questions normalisées pour le schéma d'interaction Paperclip (askUserQuestionsPayloadSchema)
+    expect(interactionPosted.payload.questions).toBeDefined();
+    expect(interactionPosted.payload.questions).toHaveLength(1);
+    const storageQ = interactionPosted.payload.questions[0];
+    expect(storageQ.id).toBe('embedding_provider');
+    expect(storageQ.selectionMode).toBe('single');
+    expect(storageQ.answerMode).toBeUndefined();
+    expect(storageQ.required).toBe(true);
+    expect(storageQ.allowOther).toBe(true);
+    // 2 choix initiaux + 1 sentinelle freeText pour customAnswer
+    expect(storageQ.options).toHaveLength(3);
+    expect(storageQ.options[0]).toEqual({ id: 'qwen_local', label: 'Qwen local (DGX Spark)', description: 'Gratuit et local.' });
+    expect(storageQ.options[1]).toEqual({ id: 'openai_api', label: 'OpenAI API', description: 'Distant payant.' });
+    expect(storageQ.options[2]).toMatchObject({ freeText: true });
+
+    // questionSet canonique v1 pour la présentation UI
     expect(interactionPosted.payload.questionSet).toBeDefined();
     expect(interactionPosted.payload.questionSet.schema).toBe('paperclip.question_set.v1');
     expect(interactionPosted.payload.questionSet.title).toBe("Choix de l'architecture d'indexation");
     expect(interactionPosted.payload.questionSet.questions).toHaveLength(1);
-
-    // Compatibilité rétroactive: questions legacy à la racine du payload
-    expect(interactionPosted.payload.questions).toBeDefined();
-    expect(interactionPosted.payload.questions).toEqual(interactionPosted.payload.questionSet.questions);
-
-    // Vérification de la question
-    const q = interactionPosted.payload.questionSet.questions[0];
-    expect(q.id).toBe('embedding_provider');
-    expect(q.answerMode).toBe('single_select');
-    expect(q.options).toHaveLength(2);
-    expect(q.customAnswer).toEqual({ enabled: true, label: 'Autre choix', placeholder: 'Saisir un autre choix...' });
+    const canonicalQ = interactionPosted.payload.questionSet.questions[0];
+    expect(canonicalQ.id).toBe('embedding_provider');
+    expect(canonicalQ.answerMode).toBe('single_select');
+    expect(canonicalQ.options).toHaveLength(2);
+    expect(canonicalQ.customAnswer).toEqual({ enabled: true, label: 'Autre choix' });
 
     // Vérification du patch in_review
     expect(issuePatched).toBeDefined();
     expect(issuePatched.status).toBe('in_review');
     expect(issuePatched.comment).toContain("Choix de l'architecture d'indexation");
+  });
+
+  it('génère une question de texte libre valide avec option freeText sentinelle', async () => {
+    let interactionPosted: any = null;
+    fake.route(`GET /api/issues/${TASK}/interactions`, () => ({ status: 200, body: [] }));
+    fake.route(`POST /api/issues/${TASK}/interactions`, (req) => {
+      interactionPosted = req.body;
+      return { status: 201, body: { id: 'inter-text-1', status: 'pending' } };
+    });
+    fake.route(`PATCH /api/issues/${TASK}`, () => ({ status: 200, body: { id: TASK, status: 'in_review' } }));
+
+    const result = await runTool('paperclip_ask_user', {
+      title: 'Question texte libre',
+      questions: [
+        {
+          id: 'user_comment',
+          prompt: 'Quelles sont vos remarques ?',
+          answerMode: 'text',
+        },
+      ],
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.waitingForHuman).toBe(true);
+
+    expect(interactionPosted).toBeDefined();
+    const q = interactionPosted.payload.questions[0];
+    expect(q.id).toBe('user_comment');
+    expect(q.selectionMode).toBe('single');
+    expect(q.allowOther).toBe(true);
+    expect(q.options).toHaveLength(1);
+    expect(q.options[0].freeText).toBe(true);
+
+    const cq = interactionPosted.payload.questionSet.questions[0];
+    expect(cq.id).toBe('user_comment');
+    expect(cq.answerMode).toBe('text');
+  });
+
+  it('génère une question multi-select avec selectionMode multi', async () => {
+    let interactionPosted: any = null;
+    fake.route(`GET /api/issues/${TASK}/interactions`, () => ({ status: 200, body: [] }));
+    fake.route(`POST /api/issues/${TASK}/interactions`, (req) => {
+      interactionPosted = req.body;
+      return { status: 201, body: { id: 'inter-multi-1', status: 'pending' } };
+    });
+    fake.route(`PATCH /api/issues/${TASK}`, () => ({ status: 200, body: { id: TASK, status: 'in_review' } }));
+
+    const result = await runTool('paperclip_ask_user', {
+      title: 'Question multi',
+      questions: [
+        {
+          id: 'features',
+          prompt: 'Quelles options activer ?',
+          selectionMode: 'multi',
+          options: [
+            { id: 'f1', label: 'Feature 1' },
+            { id: 'f2', label: 'Feature 2' },
+          ],
+        },
+      ],
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.waitingForHuman).toBe(true);
+
+    const q = interactionPosted.payload.questions[0];
+    expect(q.id).toBe('features');
+    expect(q.selectionMode).toBe('multi');
+    expect(q.options).toHaveLength(2);
+
+    const cq = interactionPosted.payload.questionSet.questions[0];
+    expect(cq.answerMode).toBe('multi_select');
   });
 });
 
@@ -200,8 +281,9 @@ describe('TC-DEC-04 — Enchaînement atomique interaction + PATCH in_review', (
     expect(sequence).toEqual(['GET_INTERACTIONS', 'POST_INTERACTION', 'PATCH_ISSUE']);
   });
 
-  it('annule l’interaction créée si le PATCH in_review échoue (rollback)', async () => {
-    let cancelCalled = false;
+  it('annule l’interaction créée si le PATCH in_review échoue (rollback via /withdraw)', async () => {
+    let withdrawCalled = false;
+    let withdrawBody: any = null;
     fake.route(`GET /api/issues/${TASK}/interactions`, () => ({ status: 200, body: [] }));
     fake.route(`POST /api/issues/${TASK}/interactions`, () => ({
       status: 201,
@@ -211,8 +293,9 @@ describe('TC-DEC-04 — Enchaînement atomique interaction + PATCH in_review', (
       status: 500,
       body: { error: 'Erreur interne de base de données' },
     }));
-    fake.route(`POST /api/issues/${TASK}/interactions/inter-fail-patch/cancel`, () => {
-      cancelCalled = true;
+    fake.route(`POST /api/issues/${TASK}/interactions/inter-fail-patch/withdraw`, (req) => {
+      withdrawCalled = true;
+      withdrawBody = req.body;
       return { status: 200, body: { ok: true } };
     });
 
@@ -231,7 +314,41 @@ describe('TC-DEC-04 — Enchaînement atomique interaction + PATCH in_review', (
     });
 
     expect(result.isError).toBe(true);
-    expect(cancelCalled).toBe(true);
+    expect(withdrawCalled).toBe(true);
+    expect(withdrawBody).toEqual({ reason: 'Échec de synchronisation de la posture in_review' });
+  });
+
+  it('annule l’interaction request_confirmation via /withdraw si le PATCH in_review échoue', async () => {
+    let withdrawCalled = false;
+    let withdrawBody: any = null;
+    fake.route(`GET /api/issues/${TASK}/documents/plan`, () => ({
+      status: 200,
+      body: { latestRevisionId: 'rev-xyz' },
+    }));
+    fake.route(`GET /api/issues/${TASK}/interactions`, () => ({ status: 200, body: [] }));
+    fake.route(`POST /api/issues/${TASK}/interactions`, () => ({
+      status: 201,
+      body: { id: 'conf-fail-patch', status: 'pending' },
+    }));
+    fake.route(`PATCH /api/issues/${TASK}`, () => ({
+      status: 500,
+      body: { error: 'Erreur patch' },
+    }));
+    fake.route(`POST /api/issues/${TASK}/interactions/conf-fail-patch/withdraw`, (req) => {
+      withdrawCalled = true;
+      withdrawBody = req.body;
+      return { status: 200, body: { ok: true } };
+    });
+
+    const result = await runTool('paperclip_request_confirmation', {
+      title: 'Validation test rollback',
+      prompt: 'Valider ?',
+      targetKey: 'plan',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(withdrawCalled).toBe(true);
+    expect(withdrawBody).toEqual({ reason: 'Échec de synchronisation de la posture in_review' });
   });
 });
 

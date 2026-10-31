@@ -485,6 +485,17 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
 
     const toolResults: WireContentBlock[] = [];
     for (const [index, call] of toolUses.entries()) {
+      // Cartes de décision v1.2 : arrêt IMMÉDIAT des outils suivants dans le même tour
+      // dès qu'un outil signale une attente humaine, tout en préservant des paires
+      // tool_use/tool_result cohérentes pour ne pas corrompre le fil chez les fournisseurs.
+      if (waitingForHuman) {
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: 'Appel non exécuté : passage en attente de décision humaine (in_review).',
+        });
+        continue;
+      }
       const launched = prelaunched.get(index);
       if (launched) {
         const outcome = await launched;
@@ -513,7 +524,6 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
       const outcome = await executeTool(toolByName, call, emit);
       if (outcome.waitingForHuman && !outcome.isError) {
         waitingForHuman = true;
-        finalText = outcome.content;
       }
       toolResults.push({
         type: 'tool_result',
@@ -617,7 +627,7 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
   if (completion === 'cancelled') stopReason = 'cancelled';
 
   return {
-    finalText: completion === 'completed' ? finalText : '',
+    finalText: completion === 'completed' && !waitingForHuman ? finalText : '',
     completion,
     finalSynthesized,
     waitingForHuman,

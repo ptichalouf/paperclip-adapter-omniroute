@@ -45,6 +45,7 @@ export interface AttemptOutcome {
   completion: string;
   finalText: string;
   stuck: boolean;
+  waitingForHuman?: boolean;
   error?: unknown;
 }
 
@@ -54,6 +55,7 @@ export interface AttemptOutcome {
  * passerelle ou identifiants refusés).
  */
 export function escalationReason(attempt: AttemptOutcome): string | null {
+  if (attempt.waitingForHuman) return null;
   if (attempt.error !== undefined) {
     if (!(attempt.error instanceof OmniRouteError)) return null;
     const code = attempt.error.classified.errorCode;

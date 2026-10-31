@@ -380,7 +380,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
       );
     });
 
-    const hasFinalResponse = result.completion === 'completed' && result.finalText.trim().length > 0;
+    const hasFinalResponse =
+      (result.completion === 'completed' && result.finalText.trim().length > 0) ||
+      result.waitingForHuman === true;
     await endTurn(hasFinalResponse ? 'ok' : 'failed');
 
     // L'historique est persisté **après** le run : il contient ce que le
@@ -536,7 +538,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
         // modèle — pourtant produite et présente dans le journal — ne sort
         // jamais en commentaire. Le fallback `summary` existe mais il est
         // filtré par `NARRATION_OPENERS` et n'est pas le contrat natif.
-        ...(result.completion === 'completed' && result.finalText.trim().length > 0
+        // Cartes de décision v1.2 : aucune finalResponse ni summary en attente humaine
+        // pour ne pas polluer le fil de discussion Paperclip avec un dump JSON d'outil.
+        ...(result.completion === 'completed' && !result.waitingForHuman && result.finalText.trim().length > 0
           ? {
               finalResponse: {
                 disposition: 'final' as const,
