@@ -412,6 +412,36 @@ describe('TC-LOOP-07 — Aucune finalResponse JSON en attente humaine dans execu
   });
 });
 
+describe('integrated yield — no speculative subtask or MCP execution after a card', () => {
+  it('does not prelaunch later subtasks before a decision card can yield', async () => {
+    const later = vi.fn(async () => ({ content: 'must not run', isError: false }));
+    const tools: WorkspaceTool[] = ['paperclip_ask_user', 'subtask', 'mcp_run_tool'].map((name) => ({
+      spec: { name, description: name, input_schema: { type: 'object', properties: {} } },
+      run: name === 'paperclip_ask_user'
+        ? async () => ({ content: 'waiting', isError: false, waitingForHuman: true })
+        : later,
+    }));
+    const client = { streamMessage: vi.fn(async () => modelResult([
+      { type: 'tool_use', id: 'card', name: 'paperclip_ask_user', input: {} },
+      { type: 'tool_use', id: 'sub1', name: 'subtask', input: {} },
+      { type: 'tool_use', id: 'mcp', name: 'mcp_run_tool', input: {} },
+      { type: 'tool_use', id: 'sub2', name: 'subtask', input: {} },
+    ])) };
+    const result = await runAgentLoop({
+      client: client as never, model: 'fake', system: '', initialUserMessage: 'Go', tools,
+      maxTokens: 100, reasoningEffort: 'none', maxTurns: 5,
+      escalationModels: ['backup'], maxEscalations: 1,
+      emit: async () => {}, warn: async () => {},
+    });
+    expect(result.waitingForHuman).toBe(true);
+    expect(later).not.toHaveBeenCalled();
+    expect(client.streamMessage).toHaveBeenCalledOnce();
+    expect(result.finalText).toBe('');
+    expect(result.finalSynthesized).toBe(false);
+    expect(result.escalations).toHaveLength(0);
+  });
+});
+
 describe('TC-LOOP-08 — Pas d’escalade de modèle lors d’une attente humaine', () => {
   it('ne déclenche pas d’escalade vers escalationModels lorsque la boucle s’arrête sur waitingForHuman', async () => {
     const askUserTool: WorkspaceTool = {

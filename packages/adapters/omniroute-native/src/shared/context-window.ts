@@ -5,6 +5,7 @@
  * Dimensionnement dynamique de l'historique et de la boucle d'agent.
  */
 import { readFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -16,28 +17,8 @@ export interface ModelContextSpec {
   fetchedAt?: number;
 }
 
-/** Tailles de contexte connues pour nos combos et modèles fréquents (en tokens). */
+/** Offline context hints for direct models, never deployment-specific routing combos. */
 export const KNOWN_MODEL_CONTEXTS: Record<string, number> = {
-  // Combos auto OmniRoute
-  'auto/best-coding': 2_000_000,
-  'auto/best-reasoning': 2_000_000,
-  'auto/best-chat': 2_000_000,
-
-  // Combos AC-Création
-  'AC-main': 872_000,
-  'AC-pro-coding': 872_000,
-  'AC-code': 872_000,
-  'AC-reflection': 872_000,
-  'AC-fast': 1_000_000,
-  'AC-factcheck': 1_000_000,
-  'AC-user': 1_000_000,
-  'AC-vision': 1_000_000,
-  'AC-compression': 1_000_000,
-  'AC-free': 256_000,
-  'AC-task': 500_000,
-  'AC-local-code': 32_768,
-  'AC-local-fast': 32_768,
-
   // Modèles amonts directs
   'claude/claude-opus-5-5': 200_000,
   'claude-opus-5-5': 200_000,
@@ -68,6 +49,26 @@ export const LOCAL_MODEL_DEFAULT_CONTEXT_TOKENS = 32_768;
 
 /** Cache en mémoire des contextes de modèles résolus. */
 const memoryContextCache = new Map<string, ModelContextSpec>();
+export const MODEL_CONTEXT_CACHE_TTL_MS = 60 * 60 * 1_000;
+
+function gatewayScope(baseUrl: string, apiKey: string): string {
+  // Credentials are hashed, never persisted in plaintext. Scope includes the gateway path.
+  return createHash('sha256').update(JSON.stringify([baseUrl.replace(/\/+$/, ''), apiKey])).digest('hex');
+}
+
+function fresh(spec: ModelContextSpec): boolean {
+  return Number.isFinite(spec.contextTokens) && spec.contextTokens > 0 &&
+    typeof spec.fetchedAt === 'number' && Number.isFinite(spec.fetchedAt) &&
+    Date.now() >= spec.fetchedAt && Date.now() - spec.fetchedAt < MODEL_CONTEXT_CACHE_TTL_MS;
+}
+
+function cachedModelContext(modelId: string, scope: string): ModelContextSpec | null {
+  const key = JSON.stringify([scope, modelId]);
+  const hit = memoryContextCache.get(key);
+  if (!hit) return null;
+  if (!fresh(hit)) { memoryContextCache.delete(key); return null; }
+  return { ...hit, source: 'memory_cache' };
+}
 
 /** Réinitialisation du cache mémoire (pour les tests). */
 export function clearModelContextCache(): void {
@@ -75,13 +76,13 @@ export function clearModelContextCache(): void {
 }
 
 /** Enregistrement manuel ou programmatique d'un contexte de modèle. */
-export function registerModelContext(modelId: string, spec: ModelContextSpec): void {
-  memoryContextCache.set(modelId, spec);
+export function registerModelContext(modelId: string, spec: ModelContextSpec, scope = ''): void {
+  memoryContextCache.set(JSON.stringify([scope, modelId]), { ...spec, fetchedAt: spec.fetchedAt ?? Date.now() });
 }
 
 /** Recherche locale synchrone (mémoire puis catalogue connu). */
-export function findLocalModelContext(modelId: string): ModelContextSpec | null {
-  const hit = memoryContextCache.get(modelId);
+export function findLocalModelContext(modelId: string, scope = ''): ModelContextSpec | null {
+  const hit = cachedModelContext(modelId, scope);
   if (hit) return hit;
 
   const directTokens = KNOWN_MODEL_CONTEXTS[modelId];
@@ -93,14 +94,14 @@ export function findLocalModelContext(modelId: string): ModelContextSpec | null 
   const slash = modelId.indexOf('/');
   if (slash > 0) {
     const unPrefixed = modelId.slice(slash + 1);
-    const unHit = memoryContextCache.get(unPrefixed);
+    const unHit = cachedModelContext(unPrefixed, scope);
     if (unHit) return unHit;
     const unTokens = KNOWN_MODEL_CONTEXTS[unPrefixed];
     if (unTokens) return { modelId, contextTokens: unTokens, source: 'known_catalog' };
   } else {
     for (const prefix of ['claude/', 'openai/', 'deepseek/', 'minimax/', 'qwen/']) {
       const prefixed = `${prefix}${modelId}`;
-      const prefHit = memoryContextCache.get(prefixed);
+      const prefHit = cachedModelContext(prefixed, scope);
       if (prefHit) return prefHit;
       const prefTokens = KNOWN_MODEL_CONTEXTS[prefixed];
       if (prefTokens) return { modelId, contextTokens: prefTokens, source: 'known_catalog' };
@@ -120,15 +121,16 @@ export async function loadRemoteModelContext(
   signal?: AbortSignal,
 ): Promise<ModelContextSpec> {
   // 1. Consultation immédiate du cache local / catalogue connu
-  const local = findLocalModelContext(modelId);
+  const scope = gatewayScope(baseUrl, apiKey);
+  const local = findLocalModelContext(modelId, scope);
   if (local && local.source !== 'default_fallback') {
     return local;
   }
 
   // 2. Consultation du disque si présent
-  const disk = loadDiskContextSpec(baseUrl, modelId);
+  const disk = loadDiskContextSpec(scope, modelId);
   if (disk) {
-    registerModelContext(modelId, disk);
+    registerModelContext(modelId, disk, scope);
     return disk;
   }
 
@@ -176,9 +178,9 @@ export async function loadRemoteModelContext(
           source: 'remote_api',
           fetchedAt: Date.now(),
         };
-        registerModelContext(modelId, spec);
-        registerModelContext(candidate, spec);
-        await saveDiskContextSpec(baseUrl, modelId, spec);
+        registerModelContext(modelId, spec, scope);
+        registerModelContext(candidate, spec, scope);
+        await saveDiskContextSpec(scope, modelId, spec);
         return spec;
       }
     } catch {
@@ -196,7 +198,6 @@ export async function loadRemoteModelContext(
     contextTokens: fallbackTokens,
     source: 'default_fallback',
   };
-  registerModelContext(modelId, fallbackSpec);
   return fallbackSpec;
 }
 
@@ -220,7 +221,7 @@ export function calculateDynamicSessionBudgets(contextTokens: number): {
   }
 
   if (contextTokens >= 1_000_000) {
-    // Très grand modèle (Gemini 1.5, AC-fast) : grand confort borné
+    // Très grand modèle (taille découverte) : grand confort borné
     // Historique : 40 % plafonné à 1,5M caractères (~428k tokens)
     // Intra-run : 50 % plafonné à 2,0M caractères (~571k tokens)
     return {
@@ -245,18 +246,21 @@ function diskContextCachePath(): string | null {
   return home ? path.join(home, 'adapter-data', 'omniroute-native', 'context-cache.json') : null;
 }
 
-function loadDiskContextSpec(baseUrl: string, modelId: string): ModelContextSpec | null {
+interface DiskContextCache {
+  version: 2;
+  scope: string;
+  specs: Record<string, ModelContextSpec>;
+}
+
+function loadDiskContextSpec(scope: string, modelId: string): ModelContextSpec | null {
   const file = diskContextCachePath();
   if (!file) return null;
   try {
-    const data = JSON.parse(readFileSync(file, 'utf8')) as {
-      baseUrl?: string;
-      specs?: Record<string, { contextTokens: number }>;
-    };
-    if (data.baseUrl !== baseUrl || !data.specs) return null;
+    const data = JSON.parse(readFileSync(file, 'utf8')) as DiskContextCache;
+    if (data.version !== 2 || data.scope !== scope || !data.specs) return null;
     const entry = data.specs[modelId];
-    if (entry && typeof entry.contextTokens === 'number') {
-      return { modelId, contextTokens: entry.contextTokens, source: 'disk_cache' };
+    if (entry && fresh(entry)) {
+      return { ...entry, modelId, source: 'disk_cache' };
     }
   } catch {
     return null;
@@ -264,22 +268,19 @@ function loadDiskContextSpec(baseUrl: string, modelId: string): ModelContextSpec
   return null;
 }
 
-async function saveDiskContextSpec(baseUrl: string, modelId: string, spec: ModelContextSpec): Promise<void> {
+async function saveDiskContextSpec(scope: string, modelId: string, spec: ModelContextSpec): Promise<void> {
   const file = diskContextCachePath();
   if (!file) return;
   try {
-    let existing: { baseUrl: string; specs: Record<string, { contextTokens: number }> } = {
-      baseUrl,
-      specs: {},
-    };
+    let existing: DiskContextCache = { version: 2, scope, specs: {} };
     try {
-      existing = JSON.parse(readFileSync(file, 'utf8'));
-      if (existing.baseUrl !== baseUrl) existing = { baseUrl, specs: {} };
+      const data = JSON.parse(readFileSync(file, 'utf8')) as DiskContextCache;
+      if (data.version === 2 && data.scope === scope && data.specs) existing = data;
     } catch {
-      // Nouveau fichier
+      // Legacy files without expiry/scope are deliberately not reused.
     }
-    existing.specs[modelId] = { contextTokens: spec.contextTokens };
-    const tmp = `${file}.${process.pid}.tmp`;
+    existing.specs[modelId] = spec;
+    const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
     await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     await writeFile(tmp, JSON.stringify(existing, null, 2), { mode: 0o600 });
     await rename(tmp, file);

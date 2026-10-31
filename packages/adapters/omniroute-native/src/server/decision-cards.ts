@@ -545,8 +545,11 @@ export function buildDecisionCardTools(
               await api.request('POST', `/issues/${enc(issueId)}/interactions/${enc(interactionId)}/withdraw`, {
                 body: { reason: 'Échec de synchronisation de la posture in_review' },
               });
-            } catch {
-              /* diagnostic silencieux */
+            } catch (withdrawError) {
+              interactionCreatedInRun = true; // Do not create another card while withdrawal is unconfirmed.
+              const initial = error instanceof Error ? error.message : String(error);
+              const withdrawal = withdrawError instanceof Error ? withdrawError.message : String(withdrawError);
+              throw new Error(`${initial}; withdraw failed for interaction ${interactionId}: ${withdrawal}. The interaction may still be pending; inspect it before retrying.`);
             }
           }
           throw error;
@@ -678,8 +681,11 @@ export function buildDecisionCardTools(
               await api.request('POST', `/issues/${enc(issueId)}/interactions/${enc(interactionId)}/withdraw`, {
                 body: { reason: 'Échec de synchronisation de la posture in_review' },
               });
-            } catch {
-              /* diagnostic silencieux */
+            } catch (withdrawError) {
+              interactionCreatedInRun = true; // Do not create another card while withdrawal is unconfirmed.
+              const initial = error instanceof Error ? error.message : String(error);
+              const withdrawal = withdrawError instanceof Error ? withdrawError.message : String(withdrawError);
+              throw new Error(`${initial}; withdraw failed for interaction ${interactionId}: ${withdrawal}. The interaction may still be pending; inspect it before retrying.`);
             }
           }
           throw error;

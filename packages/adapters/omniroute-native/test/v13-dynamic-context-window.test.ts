@@ -61,7 +61,7 @@ describe('v1.3 — Dynamic Context Window & Memory Budgets', () => {
       expect(budgets128k.historyBudgetChars).toBe(179_200);
       expect(budgets128k.intraRunBudgetChars).toBe(224_000);
 
-      // 872 000 tokens (AC-pro-coding) : 872k * 3.5 = 3 052 000 chars
+      // Hypothetical discovered 872 000-token context : 872k * 3.5 = 3 052 000 chars
       // history: clamp(100k, 400k, 1 220 800) = 400 000
       // intraRun: clamp(100k, 600k, 1 526 000) = 600 000
       const budgets872k = calculateDynamicSessionBudgets(872_000);
@@ -71,14 +71,11 @@ describe('v1.3 — Dynamic Context Window & Memory Budgets', () => {
   });
 
   describe('findLocalModelContext', () => {
-    it('trouve directement les combos et modèles dans KNOWN_MODEL_CONTEXTS', () => {
-      expect(KNOWN_MODEL_CONTEXTS['AC-pro-coding']).toBe(872_000);
-      expect(KNOWN_MODEL_CONTEXTS['auto/best-coding']).toBe(2_000_000);
-
-      const hit = findLocalModelContext('AC-pro-coding');
-      expect(hit).not.toBeNull();
-      expect(hit?.contextTokens).toBe(872_000);
-      expect(hit?.source).toBe('known_catalog');
+    it('keeps only direct-model hints in the offline catalogue', () => {
+      expect(KNOWN_MODEL_CONTEXTS['AC-pro-coding']).toBeUndefined();
+      expect(KNOWN_MODEL_CONTEXTS['auto/best-coding']).toBeUndefined();
+      expect(findLocalModelContext('AC-pro-coding')).toBeNull();
+      expect(findLocalModelContext('openai/gpt-4o')?.contextTokens).toBe(128_000);
     });
 
     it('gère les préfixes fournisseurs de manière bidirectionnelle', () => {
@@ -120,8 +117,8 @@ describe('v1.3 — Dynamic Context Window & Memory Budgets', () => {
       const fetchSpy = vi.fn();
       vi.stubGlobal('fetch', fetchSpy);
 
-      const spec = await loadRemoteModelContext('http://fake-non-existent.local', 'token', 'AC-main');
-      expect(spec.contextTokens).toBe(872_000);
+      const spec = await loadRemoteModelContext('http://fake-non-existent.local', 'token', 'openai/gpt-4o');
+      expect(spec.contextTokens).toBe(128_000);
       expect(spec.source).toBe('known_catalog');
       expect(fetchSpy).not.toHaveBeenCalled();
     });

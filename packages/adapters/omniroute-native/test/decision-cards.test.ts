@@ -442,6 +442,35 @@ describe('TC-DEC-07 — Présence obligatoire de continuationPolicy: "wake_assig
   });
 });
 
+describe('R3 — failed withdrawal is actionable, not a successful rollback', () => {
+  it.each(['paperclip_ask_user', 'paperclip_request_confirmation'])('%s reports both failures and pending risk with redaction', async (name) => {
+    fake.route(`GET /api/issues/${TASK}/interactions`, () => ({ status: 200, body: [] }));
+    fake.route(`POST /api/issues/${TASK}/interactions`, () => ({ status: 201, body: { id: 'orphan-card', status: 'pending' } }));
+    fake.route(`PATCH /api/issues/${TASK}`, () => ({ status: 500, body: { error: 'posture failed' } }));
+    fake.route(`GET /api/issues/${TASK}/documents/plan`, () => ({ status: 200, body: { key: 'plan', latestRevisionId: 'revision-1' } }));
+    fake.route(`POST /api/issues/${TASK}/interactions/orphan-card/withdraw`, () => ({ status: 503, body: { error: `withdraw failed ${TOKEN}` } }));
+    const tools = getTools();
+    const result = await tools.get(name)!.run({
+      title: 'Decision', questions: [{ id: 'q', prompt: 'Question', answerMode: 'text' }],
+      prompt: 'Confirm?', targetKey: 'plan',
+    });
+    const retry = await tools.get(name)!.run({
+      title: 'Retry', questions: [{ id: 'q', prompt: 'Question', answerMode: 'text' }],
+      prompt: 'Confirm?', targetKey: 'plan',
+    });
+    expect(retry.isError).toBe(true);
+    expect(fake.requests.filter((r) => r.method === 'POST' && r.path.endsWith('/interactions'))).toHaveLength(1);
+    expect(result.isError).toBe(true);
+    expect(result.waitingForHuman).not.toBe(true);
+    expect(result.content).toMatch(/HTTP 500/);
+    expect(result.content).toMatch(/withdraw.*HTTP 503/i);
+    expect(result.content).toContain('orphan-card');
+    expect(result.content).toMatch(/may still be pending/i);
+    expect(result.content).not.toContain(TOKEN);
+    expect(result.content).not.toMatch(/rollback succeeded|successfully withdrawn/i);
+  });
+});
+
 describe('TC-DEC-08 — Erreur HTTP 409 ou interaction déjà pendante', () => {
   it('refuse si une interaction de même kind est déjà pending', async () => {
     fake.route(`GET /api/issues/${TASK}/interactions`, () => ({

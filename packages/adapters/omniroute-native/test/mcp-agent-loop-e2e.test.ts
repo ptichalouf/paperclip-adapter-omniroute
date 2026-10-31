@@ -93,21 +93,47 @@ describe('MCP Agent Loop End-to-End', () => {
     ];
   }
 
-  it('inclut la section Outils MCP dans le prompt système uniquement si des serveurs MCP sont fournis', () => {
+  it('keeps universal MCP guidance invariant whether servers are provided or not', () => {
     const { ctx: ctxWithoutMcp } = makeTestContext();
     const promptWithout = buildSystemPromptForTest(ctxWithoutMcp as never);
-    expect(promptWithout).not.toContain('## Outils MCP et Connexions d’Entreprise');
-    expect(promptWithout).not.toContain('mcp_search_tools');
+    expect(promptWithout).toContain('## Outils MCP et Connexions d’Entreprise');
+    expect(promptWithout).toContain('mcp_search_tools');
 
     const { ctx: ctxWithMcp } = makeTestContext();
     (ctxWithMcp as any).runtimeMcp = {
       getServers: () => createMcpServers(),
     };
     const promptWith = buildSystemPromptForTest(ctxWithMcp as never);
+    expect(promptWith).toBe(promptWithout);
     expect(promptWith).toContain('Outils MCP');
     expect(promptWith).toContain('mcp_search_tools');
     expect(promptWith).toContain('mcp_run_tool');
     expect(promptWith).not.toContain(MCP_TOKEN);
+  });
+
+  it('sends byte-identical system messages over HTTP with/without MCP and different handoffs', async () => {
+    for (const hasMcp of [false, true]) {
+      for (const handoff of ['handoff-alpha', 'handoff-beta']) {
+        const { ctx } = makeTestContext({
+          config: { baseUrl: sseBaseUrl },
+          context: { paperclipWorkspace: { cwd: workspace, agentHome: workspace },
+            paperclipFreshSessionHandoffMarkdown: handoff },
+        });
+        if (hasMcp) ctx['runtimeMcp'] = { getServers: () => createMcpServers() };
+        expect((await execute(ctx as never)).exitCode).toBe(0);
+      }
+    }
+    expect(capturedGatewayRequests).toHaveLength(4);
+    const systems = capturedGatewayRequests.map((body) => JSON.stringify(body.messages.filter((m: any) => m.role === 'system')));
+    expect(new Set(systems).size).toBe(1);
+    expect(systems[0]).not.toContain(MCP_TOKEN);
+    expect(systems[0]).not.toContain('handoff-alpha');
+    expect(systems[0]).not.toContain('handoff-beta');
+    for (const body of capturedGatewayRequests) {
+      expect(systems[0]).toContain('paperclip_ask_user');
+      expect(systems[0]).toContain('mcp_run_tool');
+      expect(JSON.stringify(body.messages.filter((m: any) => m.role === 'user'))).toMatch(/handoff-alpha|handoff-beta/);
+    }
   });
 
   it('exécute un scénario complet : recherche d’outil, exécution déléguée et synthèse finale', async () => {

@@ -477,7 +477,8 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
     // (elles ne font que lire), résultats rangés dans l'ordre des appels.
     const prelaunched = new Map<number, Promise<{ content: string; isError: boolean }>>();
     const subtaskCalls = toolUses.filter((call) => call.name === SUBTASK_TOOL_NAME && toolByName.has(call.name));
-    if (subtaskCalls.length > 1 && !signal?.aborted) {
+    // Mixed batches must remain sequential: an earlier tool may yield for human input.
+    if (subtaskCalls.length > 1 && subtaskCalls.length === toolUses.length && !signal?.aborted) {
       toolUses.forEach((call, index) => {
         if (call.name === SUBTASK_TOOL_NAME) prelaunched.set(index, subtaskLimiter(() => executeTool(toolByName, call, emit)));
       });
