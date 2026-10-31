@@ -212,10 +212,6 @@ export class McpBridge {
     return this.clients.get(name);
   }
 
-  getDefaultClient(): McpHttpClient | undefined {
-    return this.clients.values().next().value;
-  }
-
   async ensureDiscovered(): Promise<void> {
     if (this.initialized) return;
 
@@ -590,7 +586,8 @@ export function buildMcpBridgeTools(options: McpBridgeOptions): WorkspaceTool[] 
             : ' Aucun serveur MCP n\'a découvert d\'outil.';
           return {
             content: redactor(
-              `Outil inconnu : « ${toolName} »${hint} n'est exposé par aucun serveur MCP configuré. Rien n'a été exécuté.${known}`,
+              `Outil inconnu : « ${toolName} »${hint} n'est exposé par aucun serveur MCP configuré. ` +
+              `Rien n'a été exécuté. Appelez d'abord mcp_search_tools pour obtenir le nom exact et le serveur de l'outil.${known}`,
             ),
             isError: true,
           };
@@ -600,7 +597,7 @@ export function buildMcpBridgeTools(options: McpBridgeOptions): WorkspaceTool[] 
           return {
             content: redactor(
               `Outil ambigu : « ${toolName} » est exposé par plusieurs serveurs MCP (${resolution.serverNames.join(', ')}). ` +
-              `Précisez « server » avec l'un de ces serveurs. Rien n'a été exécuté.`,
+              `Relancez mcp_search_tools puis précisez « server » avec l'un de ces serveurs. Rien n'a été exécuté.`,
             ),
             isError: true,
           };
