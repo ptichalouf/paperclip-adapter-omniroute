@@ -356,12 +356,13 @@ export class McpBridge {
 
     results.push(...matchedDirect);
 
-    // Déduplication par nom d'outil
+    // Preserve identities across servers, even when tool names collide.
     const seen = new Set<string>();
     const uniqueTools: DiscoveredMcpTool[] = [];
     for (const tool of results) {
-      if (!seen.has(tool.name)) {
-        seen.add(tool.name);
+      const identity = JSON.stringify([tool.serverName, tool.name]);
+      if (!seen.has(identity)) {
+        seen.add(identity);
         uniqueTools.push(tool);
         if (uniqueTools.length >= max) break;
       }
@@ -409,6 +410,16 @@ export class McpBridge {
       }
       // L'outil est une enveloppe virtuelle : ce n'est pas une cible.
       return { kind: 'unknown', toolName, serverHint };
+    }
+
+    // Consider every known server before choosing direct or virtual mode.
+    // A direct match must not hide a dynamic match on a different server.
+    const knownServers = [...new Set([
+      ...catalogMatches.filter((t) => !this.envelopeTools.get(t.serverName)?.has(t.name)).map((t) => t.serverName),
+      ...(this.dynamicTools.get(toolName) ?? []),
+    ])].sort();
+    if (knownServers.length > 1) {
+      return { kind: 'ambiguous', toolName, serverNames: knownServers };
     }
 
     // 1. Cible directe : l'outil est listé par un serveur.
