@@ -22,6 +22,8 @@ export interface RecordedPaperclipRequest {
 export interface FakeReply {
   status?: number;
   body?: unknown;
+  raw?: string | Buffer;
+  headers?: Record<string, string>;
 }
 
 /** Réponse d'une route : valeur fixe ou fonction de la requête. */
@@ -66,8 +68,8 @@ export async function startFakePaperclip(): Promise<FakePaperclip> {
       const reply: FakeReply = route === undefined
         ? { status: 404, body: { error: 'API route not found' } }
         : typeof route === 'function' ? route(recorded) : route;
-      res.writeHead(reply.status ?? 200, { 'content-type': 'application/json' });
-      res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
+      res.writeHead(reply.status ?? 200, { 'content-type': 'application/json', ...reply.headers });
+      res.end(reply.raw ?? (reply.body === undefined ? '' : JSON.stringify(reply.body)));
     });
   });
 

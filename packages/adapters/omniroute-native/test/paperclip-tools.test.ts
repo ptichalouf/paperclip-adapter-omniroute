@@ -79,6 +79,63 @@ function expectAuthHeaders() {
   }
 }
 
+describe('R2 — transport brut', () => {
+  it('expose approvalId OU description, et lie sans description', async () => {
+    const schema = tools().get('paperclip_request_approval')!.spec.input_schema;
+    expect(schema).toHaveProperty('anyOf', ['approvalId', 'description'].map((key) => ({
+      type: 'object', properties: { [key]: { type: 'string', minLength: 1 } }, required: [key],
+    })));
+    expect(schema.required).toBeUndefined();
+    fake.route(`POST /api/issues/${TASK}/approvals`, { body: [{ id: REV, status: 'pending' }] });
+    expect((await run('paperclip_request_approval', { approvalId: REV })).isError).toBe(false);
+    expect(fake.requests).toHaveLength(1);
+    expect((await run('paperclip_request_approval', {})).isError).toBe(true);
+    expect(fake.requests).toHaveLength(1);
+  });
+  it('résout ACC-123 en UUID avant création company', async () => {
+    fake.route('POST /api/issues/ACC-123/approvals', { status: 400, body: { error: 'approvalId requis' } });
+    fake.route('GET /api/issues/ACC-123', { body: issue({ identifier: 'ACC-123' }) });
+    fake.route(`POST /api/companies/${COMPANY}/approvals`, { body: { id: REV, status: 'pending' } });
+    const result = await run('paperclip_request_approval', { issueId: 'ACC-123', description: 'Valider' });
+    expect(result.isError).toBe(false);
+    expect(fake.requests.map((r) => r.path)).toEqual(['/api/issues/ACC-123/approvals', '/api/issues/ACC-123', `/api/companies/${COMPANY}/approvals`]);
+    expect(fake.requests[2]?.body).toMatchObject({ issueIds: [TASK] });
+    expectAuthHeaders();
+  });
+  it.each<Record<string, string>>([{}, { 'content-length': String(5 * 1024 * 1024) }, { 'content-range': 'bytes 0-262144/5242880' }])('refuse 5Mo sans lecture intégrale %j', async (headers) => {
+    fake.route('GET /api/attachments/large/content', { raw: 'x'.repeat(5 * 1024 * 1024), headers: { 'content-type': 'text/plain', ...headers } as Record<string, string> });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'large' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/262144 octets/);
+    expect(fake.requests[0]?.headers.range).toBe('bytes=0-262144');
+  });
+  it('masque avant fenêtres, sans casser UTF-8 ni exposer un secret coupé', async () => {
+    const raw = 'é'.repeat(9990) + TOKEN + '漢'.repeat(12000);
+    fake.route('GET /api/attachments/safe/content', { raw, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    let joined = '';
+    for (const offset of [0, 10000, 20000]) {
+      const result = await run('paperclip_get_attachment_text', { attachmentId: 'safe', offset });
+      expect(result.isError).toBe(false);
+      joined += result.content.split('---\n')[1];
+    }
+    expect(joined).toBe(raw.replace(TOKEN, '[REDACTED]'));
+  });
+  it.each(['image/png', 'application/pdf', 'application/octet-stream', 'text/plain'])('refuse le binaire %s', async (mime) => {
+    fake.route('GET /api/attachments/bin/content', {
+      raw: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0xff]), headers: { 'content-type': mime },
+    });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'bin' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/binaire|UTF-8/);
+    expect(result.content.length).toBeLessThan(500);
+  });
+  it.each(['{\n  "a": 1,\n  "b": 2\n}\n', '"quoted text"', ''])('préserve les octets texte %j', async (raw) => {
+    fake.route('GET /api/attachments/raw/content', { raw, headers: { 'content-type': 'text/plain' } });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'raw' });
+    expect(result).toEqual({ isError: false, content: `---\n${raw}` });
+  });
+});
+
 describe('lot 9 — liste des outils', () => {
   it('expose les outils paperclip_* attendus, sobres et préfixés', () => {
     const names = [...tools().keys()];
@@ -105,8 +162,10 @@ describe('lot 9 — liste des outils', () => {
     expect(names).not.toContain('connections_search');
     expect(names.length).toBeLessThanOrEqual(20);
     // Descriptions sobres : budget total mesuré dans le rapport.
-    const specChars = JSON.stringify([...tools().values()].map((t) => t.spec)).length;
-    expect(specChars).toBeLessThan(14000);
+    for (const runtimeTools of [null, { connectionsSearchUrl: 'http://localhost/search', connectionRequestUrl: 'http://localhost/request', bearerToken: RT_TOKEN }]) {
+      const specChars = JSON.stringify([...tools({ runtimeTools }).values()].map((t) => t.spec)).length;
+      expect(specChars).toBeLessThan(12000);
+    }
   });
 
   it('ne construit rien sans URL ou sans jeton', () => {
@@ -356,7 +415,7 @@ describe('lot 9 — requêtes envoyées (méthode, chemin, en-têtes, corps)', (
 
   it('paperclip_get_attachment_text lit le contenu textuel avec fenêtre', async () => {
     fake.route('GET /api/attachments/att-1/content', {
-      body: 'Log output line 1\nLog output line 2\nLog output line 3',
+      raw: 'Log output line 1\nLog output line 2\nLog output line 3', headers: { 'content-type': 'text/plain' },
     });
     const result = await run('paperclip_get_attachment_text', { attachmentId: 'att-1' });
     expect(result.isError).toBe(false);
@@ -369,7 +428,7 @@ describe('lot 9 — requêtes envoyées (méthode, chemin, en-têtes, corps)', (
 
   it('paperclip_get_attachment_text applique un offset et fenêtrage si contenu long', async () => {
     const longText = 'A'.repeat(15000);
-    fake.route('GET /api/attachments/att-big/content', { body: longText });
+    fake.route('GET /api/attachments/att-big/content', { raw: longText, headers: { 'content-type': 'text/plain' } });
     const result = await run('paperclip_get_attachment_text', { attachmentId: 'att-big', offset: 5000 });
     expect(result.isError).toBe(false);
     expect(result.content).toContain('[caractères 5000-15000 sur 15000 — fin]');
