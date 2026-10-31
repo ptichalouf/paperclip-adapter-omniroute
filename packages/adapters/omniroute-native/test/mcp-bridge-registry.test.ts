@@ -221,4 +221,95 @@ describe('McpBridge & Registry', () => {
     expect(bridge.getCatalog()).toHaveLength(1);
     expect(bridge.getCatalog()[0].name).toBe('healthy_tool');
   });
+
+  it('tolère le rejet ou l’absence de initialize (Tool Gateway Paperclip) et découvre via tools/list', async () => {
+    fake1.onRpcMethod('initialize', () => ({
+      status: 403,
+      body: { error: 'Forbidden: initialize not allowed' },
+    }));
+    fake1.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: { tools: [{ name: 'gateway_tool', description: 'Available' }] },
+      },
+    }));
+
+    const bridge = new McpBridge(
+      makeOptions([{ name: 'paperclip-tool-gw', url: fake1.url, token: 'tok', connectionId: 'c1' }]),
+    );
+
+    await bridge.ensureDiscovered();
+    expect(bridge.getCatalog()).toHaveLength(1);
+    expect(bridge.getCatalog()[0].name).toBe('gateway_tool');
+  });
+
+  it('gère la coexistence multi-serveurs avec serveurs virtuels et directs', async () => {
+    // Serveur 1 : virtuel (expose search_tools et run_tool)
+    fake1.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
+    fake1.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
+    fake1.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: {
+          tools: [
+            { name: 'search_tools', title: 'Search tools' },
+            { name: 'run_tool', title: 'Run tool' },
+          ],
+        },
+      },
+    }));
+    fake1.onRpcMethod('tools/call', (req) => {
+      if (req.body.params?.name === 'search_tools') {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: '2.0',
+            id: req.body.id,
+            result: {
+              data: {
+                tools: [{ name: 'virtual_github_issue', description: 'GitHub issue tool' }],
+              },
+            },
+          },
+        };
+      }
+      return { status: 404 };
+    });
+
+    // Serveur 2 : direct (expose db_select)
+    fake2.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
+    fake2.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
+    fake2.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: {
+          tools: [{ name: 'db_select', description: 'Database select tool' }],
+        },
+      },
+    }));
+
+    const bridge = new McpBridge(
+      makeOptions([
+        { name: 'paperclip-assigned', url: fake1.url, token: 'tok1', connectionId: 'c1' },
+        { name: 'postgres-srv', url: fake2.url, token: 'tok2', connectionId: 'c2' },
+      ]),
+    );
+
+    await bridge.ensureDiscovered();
+
+    expect(bridge.hasNativeVirtualTools('paperclip-assigned')).toBe(true);
+    expect(bridge.hasNativeVirtualTools('postgres-srv')).toBe(false);
+
+    // searchTools retourne les outils du serveur virtuel ET du serveur direct
+    const searchRes = await bridge.searchTools();
+    const toolNames = searchRes.tools.map((t) => t.name);
+    expect(toolNames).toContain('virtual_github_issue');
+    expect(toolNames).toContain('db_select');
+  });
 });

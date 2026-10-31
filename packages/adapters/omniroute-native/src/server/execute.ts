@@ -211,12 +211,27 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
   void loadRemoteModelPricing(config.baseUrl, config.apiKey ?? '', config.model).catch(() => undefined);
   const model = selectModel(config);
 
+  const mcpServers = (context.runtimeMcp ?? (ctx as { runtimeMcp?: { getServers(): any[] } }).runtimeMcp)?.getServers() ?? [];
+  const mcpTokensRecord: Record<string, string> = {};
+  for (let i = 0; i < mcpServers.length; i++) {
+    const s = mcpServers[i];
+    if (s && typeof s.token === 'string' && s.token.trim().length > 0) {
+      mcpTokensRecord[`MCP_TOKEN_${i}_${s.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`] = s.token;
+    }
+  }
+
   // Lot sécu (ACC-2300) : valeurs secrètes connues du run (jeton de run, clé
-  // de la passerelle, variables secrètes du shell et du conteneur), masquées
+  // de la passerelle, jetons serveurs MCP, variables secrètes du shell et du conteneur), masquées
   // partout — sorties d'outils, transcript, fichier de session.
-  const redact = createRedactor(
-    collectSecretValues(agentShellEnv(ctx), process.env, { OMNIROUTE_API_KEY: config.apiKey }),
-  );
+  const redact = createRedactor([
+    ...collectSecretValues(
+      agentShellEnv(ctx),
+      process.env,
+      { OMNIROUTE_API_KEY: config.apiKey },
+      mcpTokensRecord,
+    ),
+    ...mcpServers.map((s: any) => s.token).filter((t: any): t is string => typeof t === 'string'),
+  ]);
   const emit = async (entry: TranscriptEntry): Promise<void> => {
     // Masquage champ par champ, jamais sur le JSON sérialisé (un `\"` coupé
     // casserait la ligne de transcript).
@@ -310,7 +325,6 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
     );
   }
 
-  const mcpServers = (context.runtimeMcp ?? (ctx as { runtimeMcp?: { getServers(): any[] } }).runtimeMcp)?.getServers() ?? [];
   if (mcpServers.length > 0) {
     await log(
       'stdout',

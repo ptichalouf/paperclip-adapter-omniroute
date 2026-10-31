@@ -133,7 +133,8 @@ export class McpBridge {
   private clients: Map<string, McpHttpClient> = new Map();
   private catalog: DiscoveredMcpTool[] = [];
   private initialized = false;
-  private nativeVirtualTools = false;
+  private virtualServers: Set<string> = new Set();
+  private dynamicTools: Map<string, string> = new Map();
 
   constructor(private readonly options: McpBridgeOptions) {
     for (const server of options.servers) {
@@ -154,8 +155,15 @@ export class McpBridge {
     return this.initialized;
   }
 
-  hasNativeVirtualTools(): boolean {
-    return this.nativeVirtualTools;
+  hasNativeVirtualTools(serverName?: string): boolean {
+    if (serverName) {
+      return this.virtualServers.has(serverName);
+    }
+    return this.virtualServers.size > 0;
+  }
+
+  getDynamicToolServer(toolName: string): string | undefined {
+    return this.dynamicTools.get(toolName);
   }
 
   getCatalog(): DiscoveredMcpTool[] {
@@ -175,13 +183,20 @@ export class McpBridge {
 
     for (const [serverName, client] of this.clients.entries()) {
       try {
-        await client.callRpc('initialize', {
-          protocolVersion: '2025-03-26',
-          capabilities: {},
-          clientInfo: { name: 'omniroute-native-mcp', version: '1.1.0' },
-        });
+        // Handshake initialize MCP selon la spécification officielle.
+        // Non-bloquant : si la passerelle cible (ex: Tool Gateway Paperclip) ne supporte pas
+        // initialize ou n'autorise que tools/list & tools/call, on n'échoue pas la découverte.
+        try {
+          await client.callRpc('initialize', {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'omniroute-native-mcp', version: '1.1.0' },
+          });
 
-        await client.notifyRpc('notifications/initialized', {});
+          await client.notifyRpc('notifications/initialized', {});
+        } catch {
+          // Handshake initialize ignoré si non supporté ou refusé par la passerelle
+        }
 
         const listResult = await client.callRpc<{ tools?: Array<Record<string, unknown>> }>('tools/list', {});
         const tools = Array.isArray(listResult?.tools) ? listResult.tools : [];
@@ -189,7 +204,7 @@ export class McpBridge {
         const hasSearch = tools.some((t) => t.name === 'search_tools');
         const hasRun = tools.some((t) => t.name === 'run_tool');
         if (hasSearch && hasRun) {
-          this.nativeVirtualTools = true;
+          this.virtualServers.add(serverName);
         }
 
         for (const t of tools) {
@@ -213,47 +228,81 @@ export class McpBridge {
   async searchTools(query?: string, limit = 10): Promise<{ tools: DiscoveredMcpTool[] }> {
     await this.ensureDiscovered();
 
-    if (this.nativeVirtualTools) {
-      const assignedClient = this.clients.get('paperclip-assigned') ?? this.clients.values().next().value;
-      if (assignedClient) {
-        try {
-          const res = await assignedClient.callRpc<any>('tools/call', {
-            name: 'search_tools',
-            arguments: { query, limit },
-          });
-          if (res?.data?.tools && Array.isArray(res.data.tools)) {
-            return { tools: res.data.tools };
-          }
-          if (res?.structuredContent?.tools && Array.isArray(res.structuredContent.tools)) {
-            return { tools: res.structuredContent.tools };
-          }
-          if (Array.isArray(res?.content)) {
-            const textItem = res.content.find((c: any) => c.type === 'text' && typeof c.text === 'string');
-            if (textItem) {
+    const max = Math.max(1, Math.min(50, limit));
+    const results: DiscoveredMcpTool[] = [];
+
+    // 1. Délégation aux serveurs disposant d'outils virtuels (ex: paperclip-assigned)
+    for (const serverName of this.virtualServers) {
+      const client = this.clients.get(serverName);
+      if (!client) continue;
+      try {
+        const res = await client.callRpc<any>('tools/call', {
+          name: 'search_tools',
+          arguments: { query, limit: max },
+        });
+
+        let found: any[] = [];
+        if (res?.data?.tools && Array.isArray(res.data.tools)) {
+          found = res.data.tools;
+        } else if (res?.structuredContent?.tools && Array.isArray(res.structuredContent.tools)) {
+          found = res.structuredContent.tools;
+        } else if (Array.isArray(res?.content)) {
+          const textItem = res.content.find((c: any) => c.type === 'text' && typeof c.text === 'string');
+          if (textItem) {
+            try {
               const parsed = JSON.parse(textItem.text);
               if (parsed?.tools && Array.isArray(parsed.tools)) {
-                return { tools: parsed.tools };
+                found = parsed.tools;
               }
+            } catch {
+              // Ignore non-JSON
             }
           }
-        } catch (err) {
-          console.warn(`[omniroute_native] Erreur lors de search_tools natif :`, err);
         }
+
+        for (const t of found) {
+          const discovered: DiscoveredMcpTool = {
+            serverName,
+            name: String(t.name),
+            displayName: typeof t.displayName === 'string' ? t.displayName : typeof t.title === 'string' ? t.title : undefined,
+            description: typeof t.description === 'string' ? t.description : undefined,
+            parametersSchema: (t.inputSchema ?? t.parametersSchema ?? { type: 'object', properties: {} }) as Record<string, unknown>,
+            risk: t.risk === 'write' ? 'write' : 'read',
+          };
+          this.dynamicTools.set(discovered.name, serverName);
+          results.push(discovered);
+        }
+      } catch (err) {
+        console.warn(`[omniroute_native] Erreur lors de search_tools natif sur [${serverName}] :`, err);
       }
     }
 
+    // 2. Recherche locale parmi les serveurs directs (non virtuels)
     const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
-    const max = Math.max(1, Math.min(50, limit));
-    const matched = this.catalog.filter((tool) => {
+    const directTools = this.catalog.filter((tool) => !this.virtualServers.has(tool.serverName));
+    const matchedDirect = directTools.filter((tool) => {
       if (!q) return true;
       return [
         tool.name,
         tool.displayName,
         tool.description,
       ].some((val) => typeof val === 'string' && val.toLowerCase().includes(q));
-    }).slice(0, max);
+    });
 
-    return { tools: matched };
+    results.push(...matchedDirect);
+
+    // Déduplication par nom d'outil
+    const seen = new Set<string>();
+    const uniqueTools: DiscoveredMcpTool[] = [];
+    for (const tool of results) {
+      if (!seen.has(tool.name)) {
+        seen.add(tool.name);
+        uniqueTools.push(tool);
+        if (uniqueTools.length >= max) break;
+      }
+    }
+
+    return { tools: uniqueTools };
   }
 }
 
@@ -375,19 +424,30 @@ export function buildMcpBridgeTools(options: McpBridgeOptions): WorkspaceTool[] 
 
         const catalog = bridge.getCatalog();
         const toolEntry = catalog.find((t) => t.name === toolName);
+        let targetServerName: string | undefined = toolEntry?.serverName;
+
+        if (!targetServerName) {
+          targetServerName = bridge.getDynamicToolServer(toolName);
+        }
+
         let client: McpHttpClient | undefined;
-        if (toolEntry) {
-          client = bridge.getClient(toolEntry.serverName);
+        if (targetServerName) {
+          client = bridge.getClient(targetServerName);
         }
         if (!client) {
           client = bridge.getClient('paperclip-assigned') ?? bridge.getDefaultClient();
+          if (client) {
+            targetServerName = client.server.name;
+          }
         }
         if (!client) {
           return { content: 'Aucun serveur MCP configuré pour exécuter cet outil.', isError: true };
         }
 
+        const isVirtual = targetServerName ? bridge.hasNativeVirtualTools(targetServerName) : bridge.hasNativeVirtualTools();
+
         let rawResult: any;
-        if (bridge.hasNativeVirtualTools()) {
+        if (isVirtual) {
           rawResult = await client.callRpc<any>('tools/call', {
             name: 'run_tool',
             arguments: {

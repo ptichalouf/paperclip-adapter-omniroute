@@ -193,4 +193,38 @@ describe('secu — sortie d’outil masquée avant l’historique et le disque (
     const mode = (await fs.stat(path.join(sessionDir, `${sessionId}.json`))).mode & 0o777;
     expect(mode).toBe(0o600);
   });
+
+  it('masque les jetons serveurs MCP même non JWT dans les logs et sorties d’exécution', async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'secu-mcp-token-'));
+    const customMcpToken = 'custom_opaque_token_xyz_987654321';
+    gateway = await startScriptedGateway(() => ({ text: 'ok' }));
+
+    const { ctx } = makeTestContext({
+      config: { baseUrl: gateway.baseUrl },
+      context: { paperclipWorkspace: { cwd: dir, agentHome: dir } },
+    });
+
+    const mcpServers = [
+      { name: 'opaque-mcp', url: 'http://127.0.0.1:9999/mcp', token: customMcpToken, connectionId: 'c1' },
+    ];
+    (ctx as any).runtimeMcp = {
+      getServers: () => mcpServers,
+    };
+
+    const stdoutLines: string[] = [];
+    (ctx as any).onLog = async (stream: string, line: string) => {
+      if (stream === 'stdout') stdoutLines.push(line);
+    };
+
+    const result = await execute(ctx as never);
+    expect(result.exitCode).toBe(0);
+
+    const fullStdout = stdoutLines.join('\n');
+    expect(fullStdout).not.toContain(customMcpToken);
+
+    const sessionId = (result.sessionParams as { sessionId: string }).sessionId;
+    const file = path.join(dir, '.omniroute-sessions', `${sessionId}.json`);
+    const stored = await fs.readFile(file, 'utf8');
+    expect(stored).not.toContain(customMcpToken);
+  });
 });

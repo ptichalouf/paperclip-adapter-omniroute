@@ -268,4 +268,98 @@ describe('MCP Virtual Tools (mcp_search_tools & mcp_run_tool)', () => {
     expect(res.content).toContain('[REDACTED]');
     expect(res.content).not.toContain(FAKE_TOKEN);
   });
+
+  it('mcp_run_tool route vers run_tool pour le serveur virtuel et directement pour le serveur direct', async () => {
+    let virtualCalled: any = null;
+    let directCalled: any = null;
+
+    fake.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
+    fake.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
+    fake.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: {
+          tools: [
+            { name: 'search_tools', title: 'Search tools' },
+            { name: 'run_tool', title: 'Run tool' },
+          ],
+        },
+      },
+    }));
+    fake.onRpcMethod('tools/call', (req) => {
+      virtualCalled = req.body.params;
+      return {
+        status: 200,
+        body: {
+          jsonrpc: '2.0',
+          id: req.body.id,
+          result: { content: [{ type: 'text', text: 'virtual ok' }] },
+        },
+      };
+    });
+
+    const fakeDirect = await startFakeMcpGateway();
+    fakeDirect.onRpcMethod('initialize', () => ({ status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }));
+    fakeDirect.onRpcMethod('notifications/initialized', () => ({ status: 202 }));
+    fakeDirect.onRpcMethod('tools/list', () => ({
+      status: 200,
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        result: {
+          tools: [{ name: 'direct_action', description: 'Direct tool' }],
+        },
+      },
+    }));
+    fakeDirect.onRpcMethod('tools/call', (req) => {
+      directCalled = req.body.params;
+      return {
+        status: 200,
+        body: {
+          jsonrpc: '2.0',
+          id: req.body.id,
+          result: { content: [{ type: 'text', text: 'direct ok' }] },
+        },
+      };
+    });
+
+    try {
+      const toolMap = new Map(
+        buildMcpBridgeTools({
+          servers: [
+            { name: 'paperclip-assigned', url: fake.url, token: 'tok1', connectionId: 'c1' },
+            { name: 'direct-srv', url: fakeDirect.url, token: 'tok2', connectionId: 'c2' },
+          ],
+          runId: 'run-multi-1',
+          agentId: 'a1',
+          companyId: 'c1',
+        }).map((t) => [t.spec.name, t]),
+      );
+
+      const runTool = toolMap.get('mcp_run_tool')!;
+
+      // 1. Exécution de direct_action -> doit appeler direct_action en direct sur fakeDirect
+      const resDirect = await runTool.run({ tool: 'direct_action', arguments: { foo: 'bar' } });
+      expect(resDirect.isError).toBe(false);
+      expect(directCalled).toEqual({
+        name: 'direct_action',
+        arguments: { foo: 'bar' },
+      });
+
+      // 2. Exécution d'un outil virtuel -> doit appeler run_tool sur fake (paperclip-assigned)
+      const resVirtual = await runTool.run({ tool: 'virtual_target', arguments: { num: 42 } });
+      expect(resVirtual.isError).toBe(false);
+      expect(virtualCalled).toEqual({
+        name: 'run_tool',
+        arguments: {
+          tool: 'virtual_target',
+          arguments: { num: 42 },
+        },
+      });
+    } finally {
+      await fakeDirect.close();
+    }
+  });
 });
