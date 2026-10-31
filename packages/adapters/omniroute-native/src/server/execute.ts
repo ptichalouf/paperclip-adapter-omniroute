@@ -521,6 +521,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
         // permet de reprendre là où le run s'est arrêté.
         completion: result.completion,
         finalSynthesized: result.finalSynthesized,
+        ...(typeof result.waitingForHuman === 'boolean' ? { waitingForHuman: result.waitingForHuman } : {}),
         durationMs: Date.now() - started,
         cacheWriteTokens: result.cacheWriteTokens,
         gatewayHeaders: result.gatewayHeaders,
@@ -888,6 +889,7 @@ function buildPaperclipToolsSection(availability: { paperclip: boolean; connecti
     'Pour lire et modifier les tickets, utilisez les outils `paperclip_*` : le jeton et le run id sont ajoutés automatiquement et les réponses sont compactes. N\'appelez pas l\'API Paperclip depuis le shell.',
     '- Lire : `paperclip_get_issue` (ticket courant par défaut, commentaires récents, documents), `paperclip_list_comments`, `paperclip_get_document`, `paperclip_list_documents`, `paperclip_list_my_issues`.',
     '- Écrire : `paperclip_add_comment`, `paperclip_update_issue` (statut + commentaire), `paperclip_write_document`, `paperclip_create_subtask`.',
+    '- Décider (cartes d’interaction humaines) : `paperclip_ask_user` (questions/choix structurés), `paperclip_request_confirmation` (approbation d’un plan).',
     '- Livrer : `paperclip_deliver` publie document + commentaire + statut en un seul appel ; il s\'arrête au premier échec et dit ce qui est fait.',
     '- Autre route de l\'API : `paperclip_api_request` (chemin relatif à /api).',
     'Le shell reste l\'outil du reste du travail (fichiers, git, tests).',

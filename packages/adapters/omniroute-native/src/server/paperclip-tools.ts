@@ -19,6 +19,17 @@
  * vérifiées dans `server/src/routes/issues.ts` et `agents.ts` du conteneur.
  */
 import type { ToolResult, WorkspaceTool } from './tools.js';
+import {
+  buildDecisionCardTools,
+  ASK_USER_TOOL_SCHEMA,
+  REQUEST_CONFIRMATION_TOOL_SCHEMA,
+} from './decision-cards.js';
+
+export {
+  buildDecisionCardTools,
+  ASK_USER_TOOL_SCHEMA,
+  REQUEST_CONFIRMATION_TOOL_SCHEMA,
+};
 
 /** Statuts acceptés par le serveur (`ISSUE_STATUSES`, packages/shared/src/constants.ts). */
 export const ISSUE_STATUSES = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'blocked', 'cancelled'] as const;
@@ -99,7 +110,7 @@ function normalizeApiUrl(apiUrl: string): string {
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 }
 
-class PaperclipHttpError extends Error {
+export class PaperclipHttpError extends Error {
   constructor(
     readonly status: number,
     readonly method: string,
@@ -110,13 +121,13 @@ class PaperclipHttpError extends Error {
   }
 }
 
-interface ApiResponse {
+export interface ApiResponse {
   status: number;
   data: unknown;
 }
 
 /** Client REST mince : jeton + run id sur chaque requête, erreurs lisibles. */
-class PaperclipRest {
+export class PaperclipRest {
   private readonly base: string;
 
   constructor(private readonly options: PaperclipToolsOptions) {
@@ -307,7 +318,7 @@ function render(value: unknown): string {
 
 // ── Lecture des arguments ────────────────────────────────────────────────
 
-class InputError extends Error {}
+export class InputError extends Error {}
 
 function record(input: unknown): Record<string, unknown> {
   return input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
@@ -841,10 +852,11 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
       ),
     );
   }
+  tools.push(...buildDecisionCardTools(options, api));
   return tools;
 }
 
-class DeliverError extends Error {}
+export class DeliverError extends Error {}
 
 /** Lien UI d'un document : `/<préfixe>/issues/<identifiant>#document-<clé>`. */
 async function documentLink(api: PaperclipRest, issueId: string, key: string): Promise<string | null> {
@@ -863,7 +875,7 @@ async function documentLink(api: PaperclipRest, issueId: string, key: string): P
   return `/${prefix}/issues/${identifier}#document-${key}`;
 }
 
-function errorText(error: unknown): string {
+export function errorText(error: unknown): string {
   if (error instanceof PaperclipHttpError) return error.message;
   return error instanceof Error ? error.message : String(error);
 }

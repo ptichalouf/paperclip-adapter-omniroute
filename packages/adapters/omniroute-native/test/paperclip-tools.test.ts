@@ -99,10 +99,10 @@ describe('lot 9 — liste des outils', () => {
     }
     // Sans outils runtime : pas d'outils de connexion.
     expect(names).not.toContain('connections_search');
-    expect(names.length).toBeLessThanOrEqual(13);
+    expect(names.length).toBeLessThanOrEqual(15);
     // Descriptions sobres : budget total mesuré dans le rapport.
     const specChars = JSON.stringify([...tools().values()].map((t) => t.spec)).length;
-    expect(specChars).toBeLessThan(9000);
+    expect(specChars).toBeLessThan(11000);
   });
 
   it('ne construit rien sans URL ou sans jeton', () => {
