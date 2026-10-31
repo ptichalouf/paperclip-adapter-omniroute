@@ -79,6 +79,7 @@ import {
   paperclipToolsAvailability,
   paperclipToolsOptionsFromEnv,
 } from './paperclip-tools.js';
+import { buildMcpBridgeTools } from './mcp-bridge.js';
 
 export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteExecutionResult> {
   // Le serveur fournit `onProviderStopped`, que les types de la version liée
@@ -309,17 +310,37 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
     );
   }
 
+  const mcpServers = (context.runtimeMcp ?? (ctx as { runtimeMcp?: { getServers(): any[] } }).runtimeMcp)?.getServers() ?? [];
+  if (mcpServers.length > 0) {
+    await log(
+      'stdout',
+      `[omniroute_native] ${mcpServers.length} serveur(s) MCP connecté(s) : ${mcpServers.map((s: any) => s.name).join(', ')}`,
+    );
+  }
+  const mcpBridgeTools = mcpServers.length > 0
+    ? buildMcpBridgeTools({
+        servers: mcpServers,
+        runId: ctx.runId,
+        agentId: ctx.agent.id,
+        companyId: ctx.agent.companyId,
+        signal,
+        timeoutMs: config.timeoutSec ? Math.min(30_000, config.timeoutSec * 1000) : 30_000,
+        redactSecrets: redact,
+      })
+    : [];
+
   const shellEnv = agentShellEnv(ctx);
   const tools = [
     ...buildWorkspaceTools(workspaceCwd, signal, shellEnv),
     // Lot 9 — outils Paperclip directs : même source que le shell (URL,
     // identité, run id, jeton de run), jeton jamais renvoyé au modèle.
     ...buildPaperclipTools(paperclipToolsOptionsFromEnv(shellEnv, signal)),
+    ...mcpBridgeTools,
     ...(skillMounts.length > 0 ? [buildReadSkillTool(skillMounts)] : []),
     ...(instructions ? [buildReadInstructionsTool(instructions)].filter((t) => t !== null) : []),
   ];
 
-  const system = buildSystemPrompt(ctx, instructions, skillMounts);
+  const system = buildSystemPrompt(ctx, instructions, skillMounts, mcpServers.length > 0);
   await endConfigureSession('ok');
 
   const started = Date.now();
@@ -835,10 +856,22 @@ const MISSION_ENV_VAR_NAMES = [
  * skills et avant le rappel d'environnement, parce que ce sont elles qui
  * portent le contrat de travail.
  */
+function buildMcpToolsSection(): string {
+  return [
+    '## Outils MCP et Connexions d’Entreprise',
+    '',
+    'Cet agent a accès aux outils d’entreprise via la passerelle Paperclip.',
+    '- Utilisez `mcp_search_tools` pour trouver les outils disponibles par mot-clé (ex: "github", "cloudflare", "sql").',
+    '- Utilisez `mcp_run_tool` avec le nom de l’outil et ses arguments pour l’exécuter.',
+    'N’inventez pas de nom d’outil : cherchez d’abord avant d’exécuter.',
+  ].join('\n');
+}
+
 function buildSystemPrompt(
   ctx: AdapterExecutionContext,
   instructions: InstructionsBundle | null = null,
   skillMounts: SkillMount[] = [],
+  hasMcpServers = false,
 ): string {
   const configured = asString(ctx.config?.['systemPrompt'], '').trim();
   if (configured.length > 0) return configured;
@@ -861,6 +894,9 @@ function buildSystemPrompt(
     ? "PAPERCLIP_API_KEY et PAPERCLIP_RUNTIME_TOOLS_TOKEN sont également posées dans le shell (jetons de run et d'outils). Ne les affichez jamais."
     : "PAPERCLIP_API_KEY et PAPERCLIP_RUNTIME_TOOLS_TOKEN sont également posées dans le shell (jetons de run et d'outils) : elles permettent d'appeler l'API du board. Ne les affichez jamais.";
 
+  const mcpAccess = (ctx as { runtimeMcp?: { getServers(): unknown[] } }).runtimeMcp;
+  const hasMcp = hasMcpServers || ((mcpAccess?.getServers()?.length ?? 0) > 0);
+
   return joinPromptSections([
     `Vous êtes l'agent Paperclip « ${ctx.agent.name} » (${ctx.agent.id}), exécuté via la passerelle OmniRoute.`,
     handoffBlock,
@@ -868,6 +904,7 @@ function buildSystemPrompt(
     buildSkillIndex(skillMounts),
     `## Environnement Paperclip\n\nCes variables sont posées dans l'environnement du shell de cet agent :\n\n\`\`\`\n${envBlock}\n\`\`\`\n\nVariables propres à ce run, lisibles dans le shell quand elles existent : ${MISSION_ENV_VAR_NAMES.join(', ')}. Utilisez \`$PAPERCLIP_TASK_ID\` pour le ticket en cours.\n\n${tokensLine}`,
     buildPaperclipToolsSection(availability),
+    hasMcp ? buildMcpToolsSection() : '',
   ]);
 }
 

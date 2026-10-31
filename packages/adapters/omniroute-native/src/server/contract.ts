@@ -40,6 +40,7 @@
 import type {
   AdapterExecutionContext,
   AdapterExecutionResult,
+  AdapterRuntimeMcpAccess,
   ServerAdapterModule,
 } from '@paperclipai/adapter-utils';
 import type { AdapterExecutionErrorFamily } from '@paperclipai/adapter-utils/types';
@@ -86,6 +87,11 @@ export interface OmniRouteExecutionContext extends AdapterExecutionContext {
    * fournisseur démarre à neuf » (`types.ts`, `getFreshSessionHandoff`).
    */
   getFreshSessionHandoff?: () => Promise<string | null>;
+
+  /**
+   * Passerelle MCP injectée par l'hôte pour le run (serveurs assignés, projets, connexions).
+   */
+  runtimeMcp?: AdapterRuntimeMcpAccess;
 }
 
 /**
