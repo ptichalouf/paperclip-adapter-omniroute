@@ -164,6 +164,8 @@ export interface AgentLoopResult {
   completion: AgentLoopCompletion;
   /** La réponse finale vient du tour de synthèse sans outils (lot 13). */
   finalSynthesized: boolean;
+  /** Signal d'attente d'une décision humaine (v1.2). */
+  waitingForHuman?: boolean;
   turns: number;
   inputTokens: number;
   outputTokens: number;
@@ -314,6 +316,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
     finalText: last.finalText,
     completion: last.completion,
     finalSynthesized: last.finalSynthesized,
+    waitingForHuman: last.waitingForHuman,
     turns: sum('turns'),
     inputTokens: sum('inputTokens') + childUsage.inputTokens,
     outputTokens: sum('outputTokens') + childUsage.outputTokens,
@@ -373,6 +376,7 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
   let costUsd: number | null = null;
   let costTurnsMissing = 0;
   let costSource: 'provider_reported' | 'rate_card' | undefined;
+  let waitingForHuman = false;
   // Lot 20 — détection de boucle bloquée : erreurs d'outil identiques de suite.
   let lastToolError: string | null = null;
   let sameToolErrors = 0;
@@ -481,6 +485,17 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
 
     const toolResults: WireContentBlock[] = [];
     for (const [index, call] of toolUses.entries()) {
+      // Cartes de décision v1.2 : arrêt IMMÉDIAT des outils suivants dans le même tour
+      // dès qu'un outil signale une attente humaine, tout en préservant des paires
+      // tool_use/tool_result cohérentes pour ne pas corrompre le fil chez les fournisseurs.
+      if (waitingForHuman) {
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: 'Appel non exécuté : passage en attente de décision humaine (in_review).',
+        });
+        continue;
+      }
       const launched = prelaunched.get(index);
       if (launched) {
         const outcome = await launched;
@@ -507,6 +522,9 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
         currentToolName: call.name,
       });
       const outcome = await executeTool(toolByName, call, emit);
+      if (outcome.waitingForHuman && !outcome.isError) {
+        waitingForHuman = true;
+      }
       toolResults.push({
         type: 'tool_result',
         tool_use_id: call.id,
@@ -526,6 +544,12 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
       });
     } catch {
       /* un point de contrôle raté ne fait pas échouer le run */
+    }
+
+    // Cartes de décision v1.2 : arrêt immédiat de la boucle (yield) dès l'émission d'une interaction
+    if (waitingForHuman) {
+      completion = 'completed';
+      break;
     }
 
     // Lot 20 — boucle bloquée : la même erreur d'outil N fois de suite. On ne
@@ -560,6 +584,7 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
   // n'est pas fait si le run est annulé ou si la sortie est coupée.
   let finalSynthesized = false;
   const needsSynthesis =
+    !waitingForHuman &&
     attemptError === undefined &&
     !stuck &&
     !signal?.aborted &&
@@ -602,9 +627,10 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
   if (completion === 'cancelled') stopReason = 'cancelled';
 
   return {
-    finalText: completion === 'completed' ? finalText : '',
+    finalText: completion === 'completed' && !waitingForHuman ? finalText : '',
     completion,
     finalSynthesized,
+    waitingForHuman,
     turns,
     inputTokens,
     outputTokens,
@@ -777,9 +803,9 @@ async function executeTool(
   toolByName: Map<string, WorkspaceTool>,
   call: Extract<WireContentBlock, { type: 'tool_use' }>,
   emit: (entry: TranscriptEntry) => Promise<void>,
-): Promise<{ content: string; isError: boolean }> {
+): Promise<{ content: string; isError: boolean; waitingForHuman?: boolean }> {
   const tool = toolByName.get(call.name);
-  let outcome: { content: string; isError: boolean };
+  let outcome: { content: string; isError: boolean; waitingForHuman?: boolean };
 
   if (!tool) {
     // Un modèle qui invente un nom d'outil reçoit un refus exploitable plutôt
