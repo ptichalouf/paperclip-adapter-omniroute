@@ -79,6 +79,63 @@ function expectAuthHeaders() {
   }
 }
 
+describe('R2 — transport brut', () => {
+  it('expose approvalId OU description, et lie sans description', async () => {
+    const schema = tools().get('paperclip_request_approval')!.spec.input_schema;
+    expect(schema).toHaveProperty('anyOf', ['approvalId', 'description'].map((key) => ({
+      type: 'object', properties: { [key]: { type: 'string', minLength: 1 } }, required: [key],
+    })));
+    expect(schema.required).toBeUndefined();
+    fake.route(`POST /api/issues/${TASK}/approvals`, { body: [{ id: REV, status: 'pending' }] });
+    expect((await run('paperclip_request_approval', { approvalId: REV })).isError).toBe(false);
+    expect(fake.requests).toHaveLength(1);
+    expect((await run('paperclip_request_approval', {})).isError).toBe(true);
+    expect(fake.requests).toHaveLength(1);
+  });
+  it('résout ACC-123 en UUID avant création company', async () => {
+    fake.route('POST /api/issues/ACC-123/approvals', { status: 400, body: { error: 'approvalId requis' } });
+    fake.route('GET /api/issues/ACC-123', { body: issue({ identifier: 'ACC-123' }) });
+    fake.route(`POST /api/companies/${COMPANY}/approvals`, { body: { id: REV, status: 'pending' } });
+    const result = await run('paperclip_request_approval', { issueId: 'ACC-123', description: 'Valider' });
+    expect(result.isError).toBe(false);
+    expect(fake.requests.map((r) => r.path)).toEqual(['/api/issues/ACC-123/approvals', '/api/issues/ACC-123', `/api/companies/${COMPANY}/approvals`]);
+    expect(fake.requests[2]?.body).toMatchObject({ issueIds: [TASK] });
+    expectAuthHeaders();
+  });
+  it.each<Record<string, string>>([{}, { 'content-length': String(5 * 1024 * 1024) }, { 'content-range': 'bytes 0-262144/5242880' }])('refuse 5Mo sans lecture intégrale %j', async (headers) => {
+    fake.route('GET /api/attachments/large/content', { raw: 'x'.repeat(5 * 1024 * 1024), headers: { 'content-type': 'text/plain', ...headers } as Record<string, string> });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'large' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/262144 octets/);
+    expect(fake.requests[0]?.headers.range).toBe('bytes=0-262144');
+  });
+  it('masque avant fenêtres, sans casser UTF-8 ni exposer un secret coupé', async () => {
+    const raw = 'é'.repeat(9990) + TOKEN + '漢'.repeat(12000);
+    fake.route('GET /api/attachments/safe/content', { raw, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    let joined = '';
+    for (const offset of [0, 10000, 20000]) {
+      const result = await run('paperclip_get_attachment_text', { attachmentId: 'safe', offset });
+      expect(result.isError).toBe(false);
+      joined += result.content.split('---\n')[1];
+    }
+    expect(joined).toBe(raw.replace(TOKEN, '[REDACTED]'));
+  });
+  it.each(['image/png', 'application/pdf', 'application/octet-stream', 'text/plain'])('refuse le binaire %s', async (mime) => {
+    fake.route('GET /api/attachments/bin/content', {
+      raw: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0xff]), headers: { 'content-type': mime },
+    });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'bin' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/binaire|UTF-8/);
+    expect(result.content.length).toBeLessThan(500);
+  });
+  it.each(['{\n  "a": 1,\n  "b": 2\n}\n', '"quoted text"', ''])('préserve les octets texte %j', async (raw) => {
+    fake.route('GET /api/attachments/raw/content', { raw, headers: { 'content-type': 'text/plain' } });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'raw' });
+    expect(result).toEqual({ isError: false, content: `---\n${raw}` });
+  });
+});
+
 describe('lot 9 — liste des outils', () => {
   it('expose les outils paperclip_* attendus, sobres et préfixés', () => {
     const names = [...tools().keys()];
@@ -94,15 +151,21 @@ describe('lot 9 — liste des outils', () => {
       'paperclip_list_my_issues',
       'paperclip_api_request',
       'paperclip_deliver',
+      'paperclip_request_approval',
+      'paperclip_get_approval',
+      'paperclip_list_attachments',
+      'paperclip_get_attachment_text',
     ]) {
       expect(names).toContain(expected);
     }
     // Sans outils runtime : pas d'outils de connexion.
     expect(names).not.toContain('connections_search');
-    expect(names.length).toBeLessThanOrEqual(15);
+    expect(names.length).toBeLessThanOrEqual(20);
     // Descriptions sobres : budget total mesuré dans le rapport.
-    const specChars = JSON.stringify([...tools().values()].map((t) => t.spec)).length;
-    expect(specChars).toBeLessThan(11000);
+    for (const runtimeTools of [null, { connectionsSearchUrl: 'http://localhost/search', connectionRequestUrl: 'http://localhost/request', bearerToken: RT_TOKEN }]) {
+      const specChars = JSON.stringify([...tools({ runtimeTools }).values()].map((t) => t.spec)).length;
+      expect(specChars).toBeLessThan(12000);
+    }
   });
 
   it('ne construit rien sans URL ou sans jeton', () => {
@@ -267,6 +330,116 @@ describe('lot 9 — requêtes envoyées (méthode, chemin, en-têtes, corps)', (
     }
     expect(fake.requests).toHaveLength(0);
   });
+
+  it('paperclip_request_approval soumet une demande d’approbation liée au ticket', async () => {
+    fake.route(`POST /api/issues/${TASK}/approvals`, {
+      status: 201,
+      body: { id: 'app-1', status: 'pending', type: 'general', createdAt: '2026-10-31T10:00:00.000Z' },
+    });
+    const result = await run('paperclip_request_approval', {
+      description: 'Demande de validation budget 500€',
+      type: 'budget',
+      payload: { amount: 500 },
+    });
+    expect(result.isError).toBe(false);
+    expect(fake.requests[0]?.method).toBe('POST');
+    expect(fake.requests[0]?.path).toBe(`/api/issues/${TASK}/approvals`);
+    expect(fake.requests[0]?.body).toEqual({
+      type: 'budget',
+      description: 'Demande de validation budget 500€',
+      payload: { amount: 500 },
+    });
+    const content = JSON.parse(result.content);
+    expect(content.ok).toBe(true);
+    expect(content.approval?.id).toBe('app-1');
+    expectAuthHeaders();
+  });
+
+  it('paperclip_request_approval refuse une description vide', async () => {
+    const result = await run('paperclip_request_approval', { description: '   ' });
+    expect(result.isError).toBe(true);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('paperclip_get_approval consulte le statut d’une approbation', async () => {
+    fake.route('GET /api/approvals/app-1', {
+      body: {
+        id: 'app-1',
+        status: 'approved',
+        type: 'general',
+        decisionNote: 'Approuvé par Michel',
+        decidedAt: '2026-10-31T10:30:00.000Z',
+        decidedByUserId: 'user-42',
+      },
+    });
+    const result = await run('paperclip_get_approval', { approvalId: 'app-1' });
+    expect(result.isError).toBe(false);
+    expect(fake.requests[0]?.method).toBe('GET');
+    expect(fake.requests[0]?.path).toBe('/api/approvals/app-1');
+    const content = JSON.parse(result.content);
+    expect(content.id).toBe('app-1');
+    expect(content.status).toBe('approved');
+    expect(content.decisionNote).toBe('Approuvé par Michel');
+    expectAuthHeaders();
+  });
+
+  it('paperclip_get_approval refuse un approvalId manquant', async () => {
+    const result = await run('paperclip_get_approval', {});
+    expect(result.isError).toBe(true);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('paperclip_list_attachments liste les pièces jointes d’un ticket', async () => {
+    fake.route(`GET /api/issues/${TASK}/attachments`, {
+      body: [
+        {
+          id: 'att-1',
+          originalFilename: 'capture.png',
+          contentType: 'image/png',
+          byteSize: 2048,
+          createdAt: '2026-10-31T09:00:00.000Z',
+        },
+      ],
+    });
+    const result = await run('paperclip_list_attachments', {});
+    expect(result.isError).toBe(false);
+    expect(fake.requests[0]?.method).toBe('GET');
+    expect(fake.requests[0]?.path).toBe(`/api/issues/${TASK}/attachments`);
+    const content = JSON.parse(result.content);
+    expect(content.count).toBe(1);
+    expect(content.attachments[0]?.id).toBe('att-1');
+    expect(content.attachments[0]?.fileName).toBe('capture.png');
+    expect(content.attachments[0]?.byteSize).toBe(2048);
+    expectAuthHeaders();
+  });
+
+  it('paperclip_get_attachment_text lit le contenu textuel avec fenêtre', async () => {
+    fake.route('GET /api/attachments/att-1/content', {
+      raw: 'Log output line 1\nLog output line 2\nLog output line 3', headers: { 'content-type': 'text/plain' },
+    });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'att-1' });
+    expect(result.isError).toBe(false);
+    expect(fake.requests[0]?.method).toBe('GET');
+    expect(fake.requests[0]?.path).toBe('/api/attachments/att-1/content');
+    expect(result.content).toContain('Log output line 1');
+    expect(result.content).toContain('---');
+    expectAuthHeaders();
+  });
+
+  it('paperclip_get_attachment_text applique un offset et fenêtrage si contenu long', async () => {
+    const longText = 'A'.repeat(15000);
+    fake.route('GET /api/attachments/att-big/content', { raw: longText, headers: { 'content-type': 'text/plain' } });
+    const result = await run('paperclip_get_attachment_text', { attachmentId: 'att-big', offset: 5000 });
+    expect(result.isError).toBe(false);
+    expect(result.content).toContain('[caractères 5000-15000 sur 15000 — fin]');
+    expect(result.content).toContain('---');
+  });
+
+  it('paperclip_get_attachment_text refuse un attachmentId manquant', async () => {
+    const result = await run('paperclip_get_attachment_text', {});
+    expect(result.isError).toBe(true);
+    expect(fake.requests).toHaveLength(0);
+  });
 });
 
 describe('lot 9 — le jeton ne sort jamais', () => {
@@ -301,6 +474,8 @@ describe('lot 9 — le jeton ne sort jamais', () => {
       `GET /api/issues/${TASK}`, `GET /api/issues/${TASK}/comments`, `POST /api/issues/${TASK}/comments`,
       `PATCH /api/issues/${TASK}`, `GET /api/issues/${TASK}/documents`, `GET /api/issues/${TASK}/documents/plan`,
       `PUT /api/issues/${TASK}/documents/plan`, `POST /api/companies/${COMPANY}/issues`, `GET /api/companies/${COMPANY}/issues`,
+      `POST /api/issues/${TASK}/approvals`, `GET /api/approvals/app-x`, `GET /api/issues/${TASK}/attachments`,
+      `GET /api/attachments/att-x/content`,
     ]) fake.route(key, echo);
     const outputs: string[] = [];
     const inputs: Record<string, unknown> = {
@@ -315,6 +490,10 @@ describe('lot 9 — le jeton ne sort jamais', () => {
       paperclip_list_my_issues: {},
       paperclip_api_request: { method: 'GET', path: `/issues/${TASK}` },
       paperclip_deliver: { comment: 'c', status: 'done', document: { key: 'plan', body: 'x' } },
+      paperclip_request_approval: { description: 'demande' },
+      paperclip_get_approval: { approvalId: 'app-x' },
+      paperclip_list_attachments: {},
+      paperclip_get_attachment_text: { attachmentId: 'att-x' },
     };
     for (const [name, tool] of tools()) {
       outputs.push((await tool.run(inputs[name] ?? {})).content);

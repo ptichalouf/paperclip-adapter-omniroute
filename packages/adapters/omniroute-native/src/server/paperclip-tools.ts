@@ -42,6 +42,9 @@ const DOCUMENT_KEY_RE = /^[a-z0-9][a-z0-9_-]*$/;
 const MAX_OUTPUT_CHARS = 12_000;
 /** Fenêtre de lecture d'un corps de document. */
 const DOCUMENT_WINDOW_CHARS = 10_000;
+/** Fenêtre de lecture d'une pièce jointe texte. */
+const ATTACHMENT_WINDOW_CHARS = 10_000;
+const ATTACHMENT_MAX_BYTES = 262_144;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface PaperclipRuntimeConnectionTools {
@@ -137,7 +140,7 @@ export class PaperclipRest {
   async request(
     method: string,
     path: string,
-    init: { body?: unknown; query?: Record<string, string | number | undefined>; allow404?: boolean } = {},
+    init: { body?: unknown; query?: Record<string, string | number | undefined>; allow404?: boolean; rawText?: boolean } = {},
   ): Promise<ApiResponse> {
     const qs = new URLSearchParams();
     for (const [key, value] of Object.entries(init.query ?? {})) {
@@ -145,7 +148,7 @@ export class PaperclipRest {
     }
     const suffix = qs.toString();
     const url = `${this.base}${path}${suffix ? `?${suffix}` : ''}`;
-    return this.send(url, method, path, this.options.apiKey, init.body, init.allow404);
+    return this.send(url, method, path, this.options.apiKey, init.body, init.allow404, init.rawText);
   }
 
   /** Requête vers une URL absolue fournie par l'hôte (outils de connexion). */
@@ -160,11 +163,13 @@ export class PaperclipRest {
     bearer: string,
     body: unknown,
     allow404 = false,
+    rawText = false,
   ): Promise<ApiResponse> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${bearer}`,
       Accept: 'application/json',
     };
+    if (rawText) headers.Range = `bytes=0-${ATTACHMENT_MAX_BYTES}`;
     if (this.options.runId) headers['X-Paperclip-Run-Id'] = this.options.runId;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -190,9 +195,49 @@ export class PaperclipRest {
     // Masquage À LA SOURCE (revue A 58189) : un jeton présent dans une réponse
     // est remplacé avant tout découpage, sinon une troncature pouvait laisser
     // un fragment du jeton visible.
-    const text = redactSecrets(await response.text(), [this.options.apiKey, this.options.runtimeTools?.bearerToken ?? '']);
-    let data: unknown = null;
-    if (text.length > 0) {
+    let raw: string;
+    if (rawText) {
+      const tooLarge = () => new Error(`Pièce jointe refusée : limite ${ATTACHMENT_MAX_BYTES} octets (fichier complet requis pour masquer les secrets)`);
+      const range = response.headers.get('content-range');
+      if (Number(response.headers.get('content-length')) > ATTACHMENT_MAX_BYTES ||
+          (response.status === 206 && (!range || !/^bytes 0-\d+\/\d+$/.test(range) ||
+            Number(range.split('/')[1]) > ATTACHMENT_MAX_BYTES ||
+            Number(range.split('-')[1]!.split('/')[0]) + 1 !== Number(range.split('/')[1])))) {
+        await response.body?.cancel();
+        throw tooLarge();
+      }
+      const mime = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+      if (response.ok && !(mime.startsWith('text/') || /^application\/(?:json|[\w.+-]+\+json|xml|[\w.+-]+\+xml|javascript)$/.test(mime))) {
+        await response.body?.cancel();
+        throw new Error('Pièce jointe binaire ou type texte non pris en charge');
+      }
+      const reader = response.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      try {
+        while (reader) {
+          const part = await reader.read();
+          if (part.done) break;
+          size += part.value.byteLength;
+          if (size > ATTACHMENT_MAX_BYTES) throw tooLarge();
+          chunks.push(part.value);
+        }
+        try {
+          raw = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+        } catch {
+          throw new Error('Pièce jointe non décodable en UTF-8');
+        }
+      } finally {
+        await reader?.cancel();
+        reader?.releaseLock();
+      }
+      if (/\x00/.test(raw)) throw new Error('Pièce jointe binaire (NUL)');
+    } else {
+      raw = await response.text();
+    }
+    const text = redactSecrets(raw, [this.options.apiKey, this.options.runtimeTools?.bearerToken ?? '']);
+    let data: unknown = rawText ? text : null;
+    if (!rawText && text.length > 0) {
       try {
         data = JSON.parse(text);
       } catch {
@@ -286,6 +331,14 @@ function documentSummary(doc: unknown): Record<string, unknown> {
   const body = (doc as { body?: unknown; latestBody?: unknown } | null);
   const text = typeof body?.body === 'string' ? body.body : typeof body?.latestBody === 'string' ? body.latestBody : null;
   if (text !== null) out['chars'] = text.length;
+  return out;
+}
+
+function attachmentSummary(att: unknown): Record<string, unknown> {
+  const item = att && typeof att === 'object' ? (att as Record<string, unknown>) : {};
+  const out = pick(item, ['id', 'contentType', 'byteSize', 'createdAt']);
+  const name = item['fileName'] ?? item['originalFilename'] ?? item['name'];
+  if (name !== undefined && name !== null && name !== '') out['fileName'] = name;
   return out;
 }
 
@@ -794,6 +847,146 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
           fail(commentStep, error);
         }
         return [`paperclip_deliver — ticket ${issueId}`, ...done.map((line) => `FAIT : ${line}`)].join('\n');
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_request_approval',
+        description:
+          'Crée une approbation humaine liée au ticket, ou associe approvalId.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            issueId: ISSUE_ID_PROP,
+            approvalId: {
+              type: 'string',
+              description: 'UUID existant à associer.',
+            },
+            type: {
+              type: 'string',
+              enum: ['action', 'deployment', 'budget', 'access', 'general'],
+            },
+            description: {
+              type: 'string',
+              minLength: 1,
+            },
+            payload: {
+              type: 'object',
+            },
+          },
+          anyOf: ['approvalId', 'description'].map((key) => ({
+            type: 'object', properties: { [key]: { type: 'string', minLength: 1 } }, required: [key],
+          })),
+        },
+      },
+      async (input) => {
+        const issueId = issueIdOf(input);
+        const approvalId = optString(input, 'approvalId');
+        if (approvalId) {
+          const res = await api.request('POST', `/issues/${enc(issueId)}/approvals`, {
+            body: { approvalId },
+          });
+          const list = Array.isArray(res.data) ? res.data : [res.data];
+          const matched = list.find((a: unknown) => (a as { id?: unknown })?.id === approvalId) ?? list[0] ?? res.data;
+          return { ok: true, approval: pick(matched, ['id', 'status', 'type', 'createdAt']) };
+        }
+        const description = reqText(input, 'description');
+        const rawType = optString(input, 'type') ?? 'general';
+        const payload = input['payload'] && typeof input['payload'] === 'object' ? (input['payload'] as Record<string, unknown>) : undefined;
+        const body: Record<string, unknown> = {
+          type: rawType,
+          description,
+        };
+        if (payload) body['payload'] = payload;
+
+        try {
+          const res = await api.request('POST', `/issues/${enc(issueId)}/approvals`, { body });
+          const data = Array.isArray(res.data) ? res.data[0] : res.data;
+          return { ok: true, approval: pick(data, ['id', 'status', 'type', 'createdAt']) };
+        } catch (error) {
+          if (error instanceof PaperclipHttpError && error.status === 400 && options.companyId) {
+            const mappedType = ['hire_agent', 'approve_ceo_strategy', 'budget_override_required', 'request_board_approval'].includes(rawType)
+              ? rawType
+              : rawType === 'budget' ? 'budget_override_required' : 'request_board_approval';
+            const resolved = /^[A-Z][A-Z0-9]*-\d+$/i.test(issueId)
+              ? await api.request('GET', `/issues/${enc(issueId)}`) : null;
+            const linkedIssueId = resolved ? reqString(resolved.data as Record<string, unknown>, 'id') : issueId;
+            const companyRes = await api.request('POST', `/companies/${enc(options.companyId)}/approvals`, {
+              body: {
+                type: mappedType,
+                payload: { description, ...(payload ?? {}) },
+                issueIds: [linkedIssueId],
+              },
+            });
+            return { ok: true, approval: pick(companyRes.data, ['id', 'status', 'type', 'createdAt']) };
+          }
+          throw error;
+        }
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_get_approval',
+        description: 'Lit le statut et la décision d’une approbation.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            approvalId: { type: 'string' },
+          },
+          required: ['approvalId'],
+        },
+      },
+      async (input) => {
+        const approvalId = reqString(input, 'approvalId');
+        const res = await api.request('GET', `/approvals/${enc(approvalId)}`);
+        return pick(res.data, ['id', 'status', 'type', 'decision', 'decisionNote', 'decidedAt', 'decidedByUserId', 'createdAt']);
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_list_attachments',
+        description: 'Liste les pièces jointes : ID, nom, MIME, taille.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            issueId: ISSUE_ID_PROP,
+          },
+        },
+      },
+      async (input) => {
+        const issueId = issueIdOf(input);
+        const res = await api.request('GET', `/issues/${enc(issueId)}/attachments`);
+        const list = Array.isArray(res.data) ? res.data : [];
+        return {
+          count: list.length,
+          attachments: list.map(attachmentSummary),
+        };
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_get_attachment_text',
+        description:
+          `Lit du texte UTF-8 ≤256Kio, fenêtres ${ATTACHMENT_WINDOW_CHARS} caractères après masquage ; offset pour la suite.`,
+        input_schema: {
+          type: 'object',
+          properties: {
+            attachmentId: { type: 'string' },
+            offset: { type: 'integer', description: 'Caractère de départ (0).' },
+          },
+          required: ['attachmentId'],
+        },
+      },
+      async (input) => {
+        const attachmentId = reqString(input, 'attachmentId');
+        const offset = optInt(input, 'offset', 0, Number.MAX_SAFE_INTEGER) ?? 0;
+        const res = await api.request('GET', `/attachments/${enc(attachmentId)}/content`, { rawText: true });
+        const text = res.data as string;
+        const end = Math.min(text.length, offset + ATTACHMENT_WINDOW_CHARS);
+        const window = end < text.length
+          ? `[caractères ${offset}-${end} sur ${text.length} — suite avec offset=${end}]`
+          : offset > 0 ? `[caractères ${offset}-${end} sur ${text.length} — fin]` : '';
+        return `${window ? `${window}\n` : ''}---\n${text.slice(offset, end)}`;
       },
     ),
   ];
