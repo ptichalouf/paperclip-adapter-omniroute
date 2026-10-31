@@ -42,6 +42,8 @@ const DOCUMENT_KEY_RE = /^[a-z0-9][a-z0-9_-]*$/;
 const MAX_OUTPUT_CHARS = 12_000;
 /** Fenêtre de lecture d'un corps de document. */
 const DOCUMENT_WINDOW_CHARS = 10_000;
+/** Fenêtre de lecture d'une pièce jointe texte. */
+const ATTACHMENT_WINDOW_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface PaperclipRuntimeConnectionTools {
@@ -286,6 +288,14 @@ function documentSummary(doc: unknown): Record<string, unknown> {
   const body = (doc as { body?: unknown; latestBody?: unknown } | null);
   const text = typeof body?.body === 'string' ? body.body : typeof body?.latestBody === 'string' ? body.latestBody : null;
   if (text !== null) out['chars'] = text.length;
+  return out;
+}
+
+function attachmentSummary(att: unknown): Record<string, unknown> {
+  const item = att && typeof att === 'object' ? (att as Record<string, unknown>) : {};
+  const out = pick(item, ['id', 'contentType', 'byteSize', 'createdAt']);
+  const name = item['fileName'] ?? item['originalFilename'] ?? item['name'];
+  if (name !== undefined && name !== null && name !== '') out['fileName'] = name;
   return out;
 }
 
@@ -794,6 +804,143 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
           fail(commentStep, error);
         }
         return [`paperclip_deliver — ticket ${issueId}`, ...done.map((line) => `FAIT : ${line}`)].join('\n');
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_request_approval',
+        description:
+          'Demande une approbation formelle humaine sur un ticket (dépense, mise en production, modification sensible).',
+        input_schema: {
+          type: 'object',
+          properties: {
+            issueId: ISSUE_ID_PROP,
+            approvalId: {
+              type: 'string',
+              description: 'UUID d’une approbation existante à associer au ticket.',
+            },
+            type: {
+              type: 'string',
+              enum: ['action', 'deployment', 'budget', 'access', 'general'],
+              description: 'Type d’approbation requise (défaut : general).',
+            },
+            description: {
+              type: 'string',
+              description: 'Justification claire et détaillée de la demande pour l’humain.',
+            },
+            payload: {
+              type: 'object',
+              description: 'Données structurées associées (ex. commande, chemin, montant).',
+            },
+          },
+          required: ['description'],
+        },
+      },
+      async (input) => {
+        const issueId = issueIdOf(input);
+        const approvalId = optString(input, 'approvalId');
+        if (approvalId) {
+          const res = await api.request('POST', `/issues/${enc(issueId)}/approvals`, {
+            body: { approvalId },
+          });
+          const list = Array.isArray(res.data) ? res.data : [res.data];
+          const matched = list.find((a: unknown) => (a as { id?: unknown })?.id === approvalId) ?? list[0] ?? res.data;
+          return { ok: true, approval: pick(matched, ['id', 'status', 'type', 'createdAt']) };
+        }
+        const description = reqText(input, 'description');
+        const rawType = optString(input, 'type') ?? 'general';
+        const payload = input['payload'] && typeof input['payload'] === 'object' ? (input['payload'] as Record<string, unknown>) : undefined;
+        const body: Record<string, unknown> = {
+          type: rawType,
+          description,
+        };
+        if (payload) body['payload'] = payload;
+
+        try {
+          const res = await api.request('POST', `/issues/${enc(issueId)}/approvals`, { body });
+          const data = Array.isArray(res.data) ? res.data[0] : res.data;
+          return { ok: true, approval: pick(data, ['id', 'status', 'type', 'createdAt']) };
+        } catch (error) {
+          if (error instanceof PaperclipHttpError && error.status === 400 && options.companyId) {
+            const mappedType = ['hire_agent', 'approve_ceo_strategy', 'budget_override_required', 'request_board_approval'].includes(rawType)
+              ? rawType
+              : rawType === 'budget' ? 'budget_override_required' : 'request_board_approval';
+            const companyRes = await api.request('POST', `/companies/${enc(options.companyId)}/approvals`, {
+              body: {
+                type: mappedType,
+                payload: { description, ...(payload ?? {}) },
+                issueIds: [issueId],
+              },
+            });
+            return { ok: true, approval: pick(companyRes.data, ['id', 'status', 'type', 'createdAt']) };
+          }
+          throw error;
+        }
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_get_approval',
+        description: 'Vérifie l’état d’une demande d’approbation par son identifiant.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            approvalId: { type: 'string', description: 'UUID de l’approbation.' },
+          },
+          required: ['approvalId'],
+        },
+      },
+      async (input) => {
+        const approvalId = reqString(input, 'approvalId');
+        const res = await api.request('GET', `/approvals/${enc(approvalId)}`);
+        return pick(res.data, ['id', 'status', 'type', 'decision', 'decisionNote', 'decidedAt', 'decidedByUserId', 'createdAt']);
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_list_attachments',
+        description: 'Liste les pièces jointes associées à un ticket (nom, type MIME, taille, ID).',
+        input_schema: {
+          type: 'object',
+          properties: {
+            issueId: ISSUE_ID_PROP,
+          },
+        },
+      },
+      async (input) => {
+        const issueId = issueIdOf(input);
+        const res = await api.request('GET', `/issues/${enc(issueId)}/attachments`);
+        const list = Array.isArray(res.data) ? res.data : [];
+        return {
+          count: list.length,
+          attachments: list.map(attachmentSummary),
+        };
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_get_attachment_text',
+        description:
+          `Lit le contenu textuel d’une pièce jointe (log, patch, json, code) par tranches de ${ATTACHMENT_WINDOW_CHARS} caractères ; « offset » pour la suite.`,
+        input_schema: {
+          type: 'object',
+          properties: {
+            attachmentId: { type: 'string', description: 'UUID de la pièce jointe.' },
+            offset: { type: 'integer', description: 'Position de départ en caractères (défaut 0).' },
+          },
+          required: ['attachmentId'],
+        },
+      },
+      async (input) => {
+        const attachmentId = reqString(input, 'attachmentId');
+        const offset = optInt(input, 'offset', 0, Number.MAX_SAFE_INTEGER) ?? 0;
+        const res = await api.request('GET', `/attachments/${enc(attachmentId)}/content`);
+        const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+        const end = Math.min(text.length, offset + ATTACHMENT_WINDOW_CHARS);
+        const window = end < text.length
+          ? `[caractères ${offset}-${end} sur ${text.length} — suite avec offset=${end}]`
+          : offset > 0 ? `[caractères ${offset}-${end} sur ${text.length} — fin]` : '';
+        return `${window ? `${window}\n` : ''}---\n${text.slice(offset, end)}`;
       },
     ),
   ];
