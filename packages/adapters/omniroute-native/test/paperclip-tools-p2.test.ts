@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createIssueWorkProductSchema, companySearchQuerySchema } from '/opt/data/cache/scratch/paperclip-upstream/packages/shared/dist/index.js';
+import { createIssueWorkProductSchema, companySearchQuerySchema } from '@paperclipai/shared';
 
 import { buildPaperclipTools, type PaperclipToolsOptions } from '../src/server/paperclip-tools.js';
 import type { WorkspaceTool } from '../src/server/tools.js';
