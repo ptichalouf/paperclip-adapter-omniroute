@@ -1,6 +1,6 @@
-# Integrated MCP, decision cards and invariant context candidate
+# Integrated MCP, decision cards and invariant context (v1.3.0 Release Notes / Integration Record)
 
-This is an **integration-only draft**, assembling #6 → #5 → #4 by local merge commits. It does not close or supersede those PRs and is not a release/deployment approval.
+This document records the architectural integration of MCP connectors, interactive decision cards, invariant prompt and dynamic context window delivered in v1.3.0.
 
 ## Included revisions
 
@@ -48,4 +48,4 @@ Targeted red/green observations: invariant prompt failed with two system variant
 - An unsuccessful withdrawal requires inspection/remediation; the adapter does not guarantee remote rollback.
 - The A12 audit remains environment-sensitive. Both normal and no-ripgrep executions passed locally, but that is not a universal performance guarantee.
 - Node 20/22 CI must be read separately; local Node 26 success is not a substitute for CI.
-- No main branch update, old PR merge/closure, tag, release, production call or deployment is authorized by this candidate.
+- This candidate was validated and merged into main as release v1.3.0.

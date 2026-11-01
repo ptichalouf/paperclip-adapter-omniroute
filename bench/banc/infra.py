@@ -27,7 +27,7 @@ OMNIROUTE_SSH = CONFIG['omnirouteSsh']
 
 def _token() -> str:
     path = os.environ.get('BANC_TOKEN_FILE') or CONFIG['tokenFile']
-    return pathlib.Path(path).read_text().strip()
+    return pathlib.Path(path).expanduser().read_text().strip()
 
 
 def api(method: str, path: str, body=None, timeout: int = 90):

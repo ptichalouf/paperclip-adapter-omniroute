@@ -1,0 +1,24 @@
+# paperclip-adapter-omniroute
+
+> Adaptateur natif en processus pour connecter les agents autonomes Paperclip à la passerelle LLM auto-hébergée OmniRoute.
+
+Ce projet fournit l'adaptateur `omniroute_native` (paquet `@agence/omniroute-native`) qui s'exécute directement dans le processus serveur Node.js de Paperclip (aucun binaire CLI externe requis). Il communique via l'API OpenAI Chat Completions en streaming (`POST /v1/chat/completions`, Server-Sent Events avec usage de jetons), optimise le prompt caching client (`cache_control`, `sdk-cli`), prend en charge la sous-délégation (`subtask`), l'escalade automatique de modèle, les connecteurs MCP et les cartes décisionnelles interactives.
+
+## Documentation principale
+
+- [README.md](./README.md): Vue d'ensemble, points forts, démarrage rapide et configuration de l'agent.
+- [AGENTS.md](./AGENTS.md): Guide technique complet pour les agents IA (architecture des fichiers, commandes de vérification pnpm/vitest, garde-fous stricts de sécurité et de confinement).
+- [CONTRIBUTING.md](./CONTRIBUTING.md): Guide de contribution, prérequis environnementaux (Node >=20, pnpm >=9.12), règles TDD et politique de sécurité.
+- [ROADMAP.md](./ROADMAP.md): Feuille de route des versions (v1.0 livrée, v1.1 MCP livrée, v1.2 cartes décisionnelles livrée, v1.3 prompt invariant livrée, v1.4 intégration amont).
+
+## Documentation technique et guides
+
+- [Guide d'installation](./docs/installation.md): Architecture de l'adaptateur, intégration avec le plugin-loader Paperclip, configuration et vérification locale.
+- [Guide de déploiement](./docs/deploiement.md): Construction autonome des artefacts, procédure de déploiement sécurisée avec essai à blanc et retour arrière automatique.
+- [Pipeline d'export Gitea → GitHub](./docs/export-pipeline.md): Procédure d'assainissement, contrôle anti-fuite et synchronisation vers le dépôt public.
+- [Notes d'intégration](./docs/INTEGRATION.md): Rapport d'intégration de la version 1.3.0 (MCP, cartes décisionnelles, prompt invariant et gestion de contexte).
+
+## Licences et mentions tierces
+
+- [LICENSE](./LICENSE): Licence MIT du projet (Copyright (c) 2026 Alexandre Jacq / AC-Création).
+- [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md): Mentions légales et licences des composants et dépendances tiers (Paperclip, Bare, Apache-2.0, ISC, BSD-3-Clause).

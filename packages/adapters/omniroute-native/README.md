@@ -1,11 +1,11 @@
-# @agence/omniroute-paperclip-adapter
+# @agence/omniroute-native
 
-Adaptateur Paperclip pour la passerelle **OmniRoute** auto-hébergée (Unraid).
+Adaptateur Paperclip pour la passerelle **OmniRoute** auto-hébergée.
 
-OmniRoute expose une API **Anthropic Messages native** (`POST /v1/messages`) et
-agrège plusieurs centaines de modèles derrière des combos `auto/*`. Cet
+OmniRoute expose une API compatible **OpenAI Chat Completions** (`POST /v1/chat/completions`) et
+agrège plusieurs modèles derrière des combos `auto/*` et personnalisés. Cet
 adaptateur fait tourner un agent Paperclip directement sur cette API — sans CLI
-intermédiaire — en réutilisant le protocole d'outils Anthropic.
+intermédiaire — en streaming SSE avec détection de flux figé et gestion du cache.
 
 ## Pourquoi un adaptateur et pas une simple config de base URL
 
@@ -136,9 +136,9 @@ requête HTTP à la main dans le shell :
 ## Vérification
 
 ```sh
-pnpm --filter @agence/omniroute-paperclip-adapter typecheck
-pnpm --filter @agence/omniroute-paperclip-adapter build
-pnpm --filter @agence/omniroute-paperclip-adapter verify
+pnpm --filter @agence/omniroute-native typecheck
+pnpm --filter @agence/omniroute-native build
+pnpm --filter @agence/omniroute-native verify
 ```
 
 `verify` rejoue les deux chemins de chargement réels :

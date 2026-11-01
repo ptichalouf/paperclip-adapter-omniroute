@@ -16,7 +16,7 @@ Modes (un seul à la fois) :
   --dry-run   (défaut) lecture seule en production. Relit l'état, compte les runs
               actifs, puis charge l'artefact avec le VRAI chargeur Paperclip dans
               le conteneur, sur une copie sous --container-tmp (supprimée ensuite).
-  --apply     contrôles avant → sauvegarde sur l'array TANK → copie de la version
+  --apply     contrôles avant → sauvegarde sur l'hôte distant → copie de la version
               → bascule de `current` → registre réécrit atomiquement (temporaire +
               rename, après contrôle d'empreinte) → `docker restart paperclip` →
               contrôles après. Toute erreur après la bascule de `current` (registre,
@@ -58,8 +58,8 @@ ADAPTER_TYPE = "omniroute_native"
 HOST = os.environ.get("PAPERCLIP_SSH_HOST", "root@localhost")
 CONTAINER = "paperclip"
 CT_HOME = "/paperclip"                       # PAPERCLIP_HOME dans le conteneur
-HOST_HOME = "/mnt/cache/appdata/paperclip"   # même dossier vu de l'hôte TANK
-BACKUP_ROOT = "/mnt/user/appdata/paperclip/backups"  # array TANK
+HOST_HOME = os.environ.get("PAPERCLIP_HOST_HOME", "/var/lib/paperclip")
+BACKUP_ROOT = os.environ.get("PAPERCLIP_BACKUP_ROOT", "/var/backups/paperclip")
 INSTALL_REL = "adapter-plugins/omniroute-native"
 REGISTRY_REL = "adapter-plugins.json"
 HEALTH_URL = "http://127.0.0.1:3100/api/health"
@@ -219,7 +219,7 @@ def parse_args(argv):
 # ─── Accès distant ──────────────────────────────────────────────────────────
 
 class Remote:
-    """Accès à la production : `ssh` sur l'hôte TANK, `ct` dans le conteneur.
+    """Accès au serveur : `ssh` sur l'hôte distant, `ct` dans le conteneur.
 
     Les racines (`ct_home` = PAPERCLIP_HOME vu du conteneur, `host_home` = le même
     dossier vu de l'hôte, `backup_root` = sauvegardes) sont paramétrables : les tests
@@ -544,7 +544,7 @@ def apply(rm, args, art, st, report):
     current_path = f"{install}/current"
     rel_dir = f"{install}/releases/{rid}"
 
-    log("== 1. sauvegarde sur l'array TANK (avant toute écriture)")
+    log("== 1. sauvegarde sur l'hôte distant (avant toute écriture)")
     members = [REGISTRY_REL]
     old_local = st["localPath"]
     if old_local and not old_local.startswith(ct_home + "/"):

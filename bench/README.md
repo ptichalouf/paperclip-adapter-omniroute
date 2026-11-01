@@ -11,7 +11,7 @@ Banc rejoué à chaque version (Paperclip ACC-2303, ACC-2309, ACC-2290). Deux pa
    ou Anthropic `/v1/messages` avec `cache_control`).
 
 Le code n'a besoin que de Python 3 (bibliothèque standard), de `ssh` vers l'hôte Paperclip et l'hôte
-OmniRoute, et du jeton board (`/opt/data/.paperclip/board-token-paperclip`, jamais affiché).
+OmniRoute, et du jeton d'authentification (`~/.paperclip/token` ou variable `BANC_TOKEN_FILE`, jamais affiché).
 
 ## Tâches
 
@@ -33,8 +33,8 @@ enfants de la tâche ACC-2303 (projet « Adaptateur OmniRoute natif »), assign�
 ## Rejouer le banc à la prochaine version
 
 ```sh
-cd <dépôt>                         # racine du dépôt ac-paperclip-adapters
-E=/opt/data/work/omniroute-models-fix/evidence/banc-$(date +%Y%m%d)
+cd <dépôt>                         # racine du dépôt paperclip-adapter-omniroute
+E=./evidence/banc-$(date +%Y%m%d)
 mkdir -p $E
 # 0. sauvegarde exacte de l'agent de test (adapter_type, adapter_config, runtime_config, updated_at)
 python3 bench/agent.py sauver --fichier $E/agent-test-avant.json

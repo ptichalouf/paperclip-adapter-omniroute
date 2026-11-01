@@ -69,7 +69,7 @@ OmniRoute auto-hébergée** (Unraid) plutôt que via un CLI d'éditeur.
 ## Configuration
 
 - \`baseUrl\` — racine de la passerelle. Défaut :
-  \`http://192.168.1.10:20128\` (instance de l'agence). Repli sur
+  \`http://localhost:20128\`. Repli sur
   \`OMNIROUTE_BASE_URL\` puis \`ANTHROPIC_BASE_URL\`.
 - \`apiKey\` — clé de la passerelle. Repli sur \`OMNIROUTE_API_KEY\` puis
   \`ANTHROPIC_API_KEY\`. **OmniRoute exige \`Authorization: Bearer\`** : il

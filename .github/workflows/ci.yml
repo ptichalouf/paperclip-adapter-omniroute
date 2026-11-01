@@ -44,3 +44,11 @@ jobs:
           cd packages/adapters/omniroute-native
           node test/load-path.verify.mjs
           node test/ui-parser.verify.mjs
+
+      - name: Anti-leak prevention check
+        run: bash scripts/check-anti-leak.sh
+
+      - name: Run Python offline test suites
+        run: |
+          python3 -m unittest discover -s bench -q
+          python3 -m unittest discover -s deploy/tests -q

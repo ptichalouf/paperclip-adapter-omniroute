@@ -1,7 +1,7 @@
 # Installation durable de l'adaptateur `omniroute_native` dans Paperclip
 
 Paperclip charge les adaptateurs externes listés dans `/paperclip/adapter-plugins.json`
-(hôte TANK : `/mnt/cache/appdata/paperclip/adapter-plugins.json`), au démarrage du
+(sur l'hôte : `/var/lib/paperclip/adapter-plugins.json` ou chemin configuré sur l'hôte), au démarrage du
 serveur uniquement. Si un paquet listé ne se charge pas, le serveur écrit un simple
 avertissement (`Failed to dynamically load external adapter; skipping`) et les agents
 `omniroute_native` passent **sans alerte** par l'adaptateur générique `process`.
@@ -35,8 +35,8 @@ Depuis un clone à jour de `main`, dépendances installées (`pnpm install --fro
 
 ```bash
 deploy/build-artifact.sh            # → deploy/out/omniroute-native-<sha7>.tar.gz (+ .sha256, .manifest.txt)
-# sur l'hôte Hermes, pnpm n'est pas dans le PATH :
-env PNPM="node /opt/data/home/.npm-global/lib/node_modules/pnpm/bin/pnpm.cjs" deploy/build-artifact.sh
+# Si pnpm n'est pas dans le PATH global :
+env PNPM="npx --yes pnpm" deploy/build-artifact.sh
 ```
 
 Le script affiche deux empreintes. Pour vérifier que l'artefact déployé correspond au
@@ -72,7 +72,7 @@ Ordre d'exécution, avec arrêt au premier échec :
 
 1. Contrôles : essai à blanc réussi, 0 run actif, `/api/health` à 200, artefact sans
    modification non commitée (sinon `--allow-dirty`).
-2. Sauvegarde sur l'array TANK, `/mnt/user/appdata/paperclip/backups/`, contenant :
+2. Sauvegarde sur l'hôte distant, `/var/backups/paperclip/`, contenant :
    - `omniroute-native-pre-deploy-<stamp>.tar.gz` : registre, paquet en service, `current` ;
    - `adapter-plugins.json.<stamp>` ;
    - `omniroute-native-lot14-<stamp>.state.json` : état précédent et empreintes SHA-256.
@@ -190,7 +190,7 @@ s'exécuter tant qu'un run est actif.
 
 - La CI construit et recharge l'artefact avec une copie conforme des étapes du chargeur
   (`verify-artifact.mjs`). Elle ne peut pas exécuter le vrai chargeur : l'image
-  `ac-overlay/paperclip` n'existe que sur TANK et n'est publiée dans aucun registre
+  personnalisée de Paperclip est privée et n'est disponible dans aucun registre public
   accessible au runner. Le vrai chargeur ne s'exécute que pendant l'essai à blanc, dans le
   conteneur.
 - `@paperclipai/adapter-utils` reste en `2026.916.1` (celle du lockfile), alors que le
