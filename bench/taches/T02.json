@@ -1,7 +1,7 @@
 {
   "id": "T02",
   "titre": "Lire un ticket et le résumer",
-  "prompt": "Lis le ticket ACC-2298 (titre et description complète) via l'API Paperclip et publie sur CE ticket-ci un commentaire qui le résume : première ligne = le titre exact d'ACC-2298, puis 3 à 5 puces. Ne modifie pas ACC-2298 et n'y commente pas. Passe ensuite ce ticket-ci en done.",
+  "prompt": "Lis le ticket TASK-1002 (titre et description complète) via l'API Paperclip et publie sur CE ticket-ci un commentaire qui le résume : première ligne = le titre exact d'TASK-1002, puis 3 à 5 puces. Ne modifie pas TASK-1002 et n'y commente pas. Passe ensuite ce ticket-ci en done.",
   "verifs": [
     {
       "type": "run_reussi"

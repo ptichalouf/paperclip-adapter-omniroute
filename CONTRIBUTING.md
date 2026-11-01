@@ -8,8 +8,8 @@ Ce projet accueille chaleureusement les contributions des développeurs humains 
 
 ## Prérequis d'environnement
 
-- **Node.js** : `>=20.0.0` (Node 20 ou 22 LTS recommandé)
-- **pnpm** : `>=9.12.0`
+- **Node.js** : `>=22.15` (CI Node 22 et 24 ; l’adaptateur tourne dans le Node fourni par Paperclip)
+- **pnpm** : `9.12.0`
 - **Python 3** : `>=3.10` pour les suites de banc et de déploiement hors ligne
 
 ---

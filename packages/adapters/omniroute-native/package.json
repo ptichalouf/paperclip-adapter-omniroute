@@ -17,7 +17,8 @@
     "dist",
     "ui-parser.cjs",
     "README.md",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
@@ -31,11 +32,12 @@
     "@paperclipai/adapter-utils": "2026.916.1"
   },
   "devDependencies": {
+    "@paperclipai/shared": "2026.916.1",
     "@types/node": "^24.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.15"
   }
 }

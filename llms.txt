@@ -8,7 +8,7 @@ Ce projet fournit l'adaptateur `omniroute_native` (paquet `@agence/omniroute-nat
 
 - [README.md](./README.md): Vue d'ensemble, points forts, démarrage rapide et configuration de l'agent.
 - [AGENTS.md](./AGENTS.md): Guide technique complet pour les agents IA (architecture des fichiers, commandes de vérification pnpm/vitest, garde-fous stricts de sécurité et de confinement).
-- [CONTRIBUTING.md](./CONTRIBUTING.md): Guide de contribution, prérequis environnementaux (Node >=20, pnpm >=9.12), règles TDD et politique de sécurité.
+- [CONTRIBUTING.md](./CONTRIBUTING.md): Guide de contribution, prérequis environnementaux (Node >=22.15, pnpm 9.12.0), règles TDD et politique de sécurité.
 - [ROADMAP.md](./ROADMAP.md): Feuille de route des versions (v1.0 livrée, v1.1 MCP livrée, v1.2 cartes décisionnelles livrée, v1.3 prompt invariant livrée, v1.4 intégration amont).
 
 ## Documentation technique et guides

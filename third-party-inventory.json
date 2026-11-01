@@ -1,0 +1,805 @@
+{
+  "project": "paperclip-adapter-omniroute",
+  "generator": "generate_third_party_notices.py",
+  "summary": {
+    "entries": 36,
+    "licenses": {
+      "Apache-2.0": 11,
+      "BSD-3-Clause": 1,
+      "ISC": 2,
+      "MIT": 22
+    },
+    "notice_files": 2,
+    "upstream_licenses": 2
+  },
+  "sources": [
+    {
+      "package": "@paperclipai/adapter-utils@2026.916.1",
+      "tarball_url": "https://registry.npmjs.org/@paperclipai/adapter-utils/-/adapter-utils-2026.916.1.tgz",
+      "integrity_sha512": "sha512-o4gvSCTrnO9fJmQrmTvZPODM+U6byWpxgJkBMlN4qzkf8Gggu3CzVxhoIy7eVhOJxYT4eIpRhir5rFBiZaffTQ==",
+      "registry_dist_integrity_match": true,
+      "category": "runtime-direct",
+      "provenance": {
+        "attestation_url": "https://registry.npmjs.org/-/npm/v1/attestations/%40paperclipai%2Fadapter-utils@2026.916.1",
+        "source_repository": "https://github.com/paperclipai/paperclip",
+        "source_commit": "8f8a0ab7effbd6a0584107d8038736c134ee5047",
+        "workflow_ref": "refs/heads/master"
+      }
+    },
+    {
+      "package": "@paperclipai/shared@2026.916.1",
+      "tarball_url": "https://registry.npmjs.org/@paperclipai/shared/-/shared-2026.916.1.tgz",
+      "integrity_sha512": "sha512-SrAuGkqt0hpuTJ82J0Hk6tYao/7I7djp3wzYaYT7rej3se9PnZ5cKT8HI5/du9TM0RLO7+fElhdVG7IDyGuIZg==",
+      "registry_dist_integrity_match": true,
+      "category": "paperclip-shared",
+      "provenance": {
+        "attestation_url": "https://registry.npmjs.org/-/npm/v1/attestations/%40paperclipai%2Fshared@2026.916.1",
+        "source_repository": "https://github.com/paperclipai/paperclip",
+        "source_commit": "8f8a0ab7effbd6a0584107d8038736c134ee5047",
+        "workflow_ref": "refs/heads/master"
+      }
+    },
+    {
+      "package": "picocolors@1.1.1",
+      "tarball_url": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+      "integrity_sha512": "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==",
+      "registry_dist_integrity_match": true,
+      "category": "runtime-transitive"
+    },
+    {
+      "package": "zod@4.6.7",
+      "tarball_url": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
+      "integrity_sha512": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
+      "registry_dist_integrity_match": true,
+      "category": "runtime-transitive"
+    },
+    {
+      "package": "typescript@5.9.3",
+      "tarball_url": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
+      "integrity_sha512": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+      "registry_dist_integrity_match": true,
+      "category": "development"
+    },
+    {
+      "package": "vitest@3.2.7",
+      "tarball_url": "https://registry.npmjs.org/vitest/-/vitest-3.2.7.tgz",
+      "integrity_sha512": "sha512-KrxIJ62Fd89gfysR4WotlgZABiz2dqFPgqGzX7s+CwsqLFomRH7777ZcrOD6+WVAh7khPQP41A+BKbpcJFrdEg==",
+      "registry_dist_integrity_match": true,
+      "category": "development"
+    },
+    {
+      "package": "vite@7.3.7",
+      "tarball_url": "https://registry.npmjs.org/vite/-/vite-7.3.7.tgz",
+      "integrity_sha512": "sha512-AHEzTORMbi7/7aXp7w7KZ5+DCUdSeLsJz0grY8xHpc9DHdYb0vQu6DqJfm2tOw3gDExNgPgnJTXxM6syYFHaCA==",
+      "registry_dist_integrity_match": true,
+      "category": "development"
+    },
+    {
+      "package": "expect-type@1.4.0",
+      "tarball_url": "https://registry.npmjs.org/expect-type/-/expect-type-1.4.0.tgz",
+      "integrity_sha512": "sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==",
+      "registry_dist_integrity_match": true,
+      "category": "development"
+    },
+    {
+      "package": "siginfo@2.0.0",
+      "tarball_url": "https://registry.npmjs.org/siginfo/-/siginfo-2.0.0.tgz",
+      "integrity_sha512": "sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==",
+      "registry_dist_integrity_match": true,
+      "category": "development"
+    },
+    {
+      "package": "source-map-js@1.2.2",
+      "tarball_url": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz",
+      "integrity_sha512": "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==",
+      "registry_dist_integrity_match": true,
+      "category": "development"
+    }
+  ],
+  "components": [
+    {
+      "name": "@paperclipai/adapter-utils",
+      "version": "2026.916.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "https://github.com/paperclipai/paperclip",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "upstream-repository",
+          "url": "https://raw.githubusercontent.com/paperclipai/paperclip/8f8a0ab7effbd6a0584107d8038736c134ee5047/LICENSE",
+          "basis": "repository LICENSE at the npm provenance source commit (repository field: paperclipai/paperclip, directory packages/adapter-utils); also identical at tag v2026.916.1 (d554c4789ed3930f8a53ac9fdf6503b3187097da)",
+          "identical_to": "@paperclipai/shared@2026.916.1 package/LICENSE",
+          "provenance_commit": "8f8a0ab7effbd6a0584107d8038736c134ee5047",
+          "sha256": "7f8a27f0979bded50e240caa8c8c29f3088ddf87032cb83e5a9732bff91d18b4",
+          "bytes": 1069
+        }
+      ]
+    },
+    {
+      "name": "@agentclientprotocol/sdk",
+      "version": "1.5.0",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/@agentclientprotocol/sdk/package.json",
+      "repository": "git+https://github.com/agentclientprotocol/typescript-sdk.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/@agentclientprotocol/sdk/LICENSE",
+          "sha256": "6ed4f049cce59e05197d585bdf8a39980b45d546d6ea718ee344555f3a867c3a",
+          "bytes": 10783
+        }
+      ]
+    },
+    {
+      "name": "@clack/core",
+      "version": "1.5.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/@clack/core/package.json",
+      "repository": "git+https://github.com/bombshell-dev/clack.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/@clack/core/LICENSE",
+          "sha256": "3e873d2aba8b76bcbe151ba558506ca6bfa8437db9323fa87086c5a7fcf10f42",
+          "bytes": 1123
+        }
+      ]
+    },
+    {
+      "name": "@clack/prompts",
+      "version": "1.8.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/@clack/prompts/package.json",
+      "repository": "git+https://github.com/bombshell-dev/clack.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/@clack/prompts/LICENSE",
+          "sha256": "3e873d2aba8b76bcbe151ba558506ca6bfa8437db9323fa87086c5a7fcf10f42",
+          "bytes": 1123
+        }
+      ]
+    },
+    {
+      "name": "@esbuild/linux-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/@esbuild/linux-x64/package.json",
+      "repository": "git+https://github.com/evanw/esbuild.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "upstream-repository",
+          "url": "https://raw.githubusercontent.com/evanw/esbuild/609683d892977362a0f99026cb74b96263d728a9/LICENSE.md",
+          "basis": "repository LICENSE.md at the npm provenance source commit = tag v0.28.2 (repository field: evanw/esbuild)",
+          "identical_to": "@paperclipai/adapter-utils@2026.916.1 package/node_modules/esbuild/LICENSE.md",
+          "provenance_commit": "609683d892977362a0f99026cb74b96263d728a9",
+          "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681",
+          "bytes": 1069
+        }
+      ]
+    },
+    {
+      "name": "acpx",
+      "version": "0.12.0",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/acpx/package.json",
+      "repository": "https://github.com/openclaw/acpx",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/acpx/LICENSE",
+          "sha256": "5c3dd08185d6d0a0045a45b9aea2fd9d85343f7ed5dbe23915e6f15e7b814f2d",
+          "bytes": 1070
+        }
+      ]
+    },
+    {
+      "name": "b4a",
+      "version": "1.9.0",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/b4a/package.json",
+      "repository": "git+https://github.com/holepunchto/b4a.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/b4a/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "bare-events",
+      "version": "2.9.2",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/bare-events/package.json",
+      "repository": "git+https://github.com/holepunchto/bare-events.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/bare-events/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "bare-fs",
+      "version": "4.8.1",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/bare-fs/package.json",
+      "repository": "git+https://github.com/holepunchto/bare-fs.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/bare-fs/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "bare-path",
+      "version": "3.1.2",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/bare-path/package.json",
+      "repository": "git+https://github.com/holepunchto/bare-path.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/bare-path/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        },
+        {
+          "kind": "NOTICE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/bare-path/NOTICE",
+          "sha256": "fd4098360de4b9fb2e003ac7c852e8c86f264a1d6e27c47128e8c8075c81249b",
+          "bytes": 1174
+        }
+      ]
+    },
+    {
+      "name": "bare-stream",
+      "version": "2.13.4",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/bare-stream/package.json",
+      "repository": "git+https://github.com/holepunchto/bare-stream.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/bare-stream/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "bare-url",
+      "version": "2.5.4",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/bare-url/package.json",
+      "repository": "git+https://github.com/holepunchto/bare-url.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/bare-url/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "commander",
+      "version": "15.0.0",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/commander/package.json",
+      "repository": "git+https://github.com/tj/commander.js.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/commander/LICENSE",
+          "sha256": "04512a63dce4d2d506ad612dc0bd7681ccf6e3655f7b6eaef7dfac8323d1ec0b",
+          "bytes": 1098
+        }
+      ]
+    },
+    {
+      "name": "esbuild",
+      "version": "0.28.2",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/esbuild/package.json",
+      "repository": "git+https://github.com/evanw/esbuild.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/esbuild/LICENSE.md",
+          "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681",
+          "bytes": 1069
+        }
+      ]
+    },
+    {
+      "name": "events-universal",
+      "version": "1.0.1",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/events-universal/package.json",
+      "repository": "git+https://github.com/holepunchto/events-universal.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/events-universal/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "fast-fifo",
+      "version": "1.3.2",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/fast-fifo/package.json",
+      "repository": "https://github.com/mafintosh/fast-fifo.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/fast-fifo/LICENSE",
+          "sha256": "41a2aa55a9ebad3df900cf37fded512714a127f4300ef54b978f834a11ec4d48",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "fast-string-truncated-width",
+      "version": "3.0.3",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/fast-string-truncated-width/package.json",
+      "repository": "github:fabiospampinato/fast-string-truncated-width",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/fast-string-truncated-width/license",
+          "sha256": "2547dead17a32b1e49a588e943d52420b4d75f1349d9afd9ecb567b2dc8911c0",
+          "bytes": 1091
+        }
+      ]
+    },
+    {
+      "name": "fast-string-width",
+      "version": "3.0.2",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/fast-string-width/package.json",
+      "repository": "github:fabiospampinato/fast-string-width",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/fast-string-width/license",
+          "sha256": "2547dead17a32b1e49a588e943d52420b4d75f1349d9afd9ecb567b2dc8911c0",
+          "bytes": 1091
+        }
+      ]
+    },
+    {
+      "name": "fast-wrap-ansi",
+      "version": "0.2.2",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/fast-wrap-ansi/package.json",
+      "repository": "git+https://github.com/43081j/fast-wrap-ansi.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/fast-wrap-ansi/LICENSE",
+          "sha256": "9235f5ebfd80d41920fae7a0317caa3914f2a9249837bc486d7706f73080e375",
+          "bytes": 1151
+        }
+      ]
+    },
+    {
+      "name": "sisteransi",
+      "version": "1.0.5",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/sisteransi/package.json",
+      "repository": "https://github.com/terkelg/sisteransi",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/sisteransi/license",
+          "sha256": "ade66f698fd417addc4d948a85ef33e8abb302daff6453feda18b191d250e54d",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "skillflag",
+      "version": "0.2.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/skillflag/package.json",
+      "repository": "git+https://github.com/osolmaz/skillflag.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/skillflag/LICENSE",
+          "sha256": "40b90a48d3fa1d78b5a3d5dcb481a13e9d7e581c269430b87b867f73a0c8a0ca",
+          "bytes": 1068
+        }
+      ]
+    },
+    {
+      "name": "streamx",
+      "version": "2.28.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/streamx/package.json",
+      "repository": "https://github.com/mafintosh/streamx.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/streamx/LICENSE",
+          "sha256": "41a2aa55a9ebad3df900cf37fded512714a127f4300ef54b978f834a11ec4d48",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "tar-stream",
+      "version": "3.2.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/tar-stream/package.json",
+      "repository": "git+https://github.com/mafintosh/tar-stream.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/tar-stream/LICENSE",
+          "sha256": "3fe8d55a98dbf260eace67c00cf9bc53edb46234e840098a0b93df3096b97fb6",
+          "bytes": 1078
+        }
+      ]
+    },
+    {
+      "name": "teex",
+      "version": "1.0.1",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/teex/package.json",
+      "repository": "https://github.com/mafintosh/teex.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/teex/LICENSE",
+          "sha256": "69b1ce578ad0aa97ce5302c7cb8d507c2fbe5a670712b02f0b4a2b95cae3184a",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "text-decoder",
+      "version": "1.2.7",
+      "license": "Apache-2.0",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/text-decoder/package.json",
+      "repository": "git+https://github.com/holepunchto/text-decoder.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/text-decoder/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        }
+      ]
+    },
+    {
+      "name": "tsx",
+      "version": "4.23.15",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/tsx/package.json",
+      "repository": "privatenumber/tsx",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/tsx/LICENSE",
+          "sha256": "8dded67841a9261a622c739fb61c81785e93765de852828ceeb9403d20a74581",
+          "bytes": 1088
+        }
+      ]
+    },
+    {
+      "name": "zod",
+      "version": "4.6.5",
+      "license": "MIT",
+      "category": "runtime-direct",
+      "carrier": "@paperclipai/adapter-utils@2026.916.1",
+      "bundled": true,
+      "manifest_path_in_tarball": "package/node_modules/zod/package.json",
+      "repository": "git+https://github.com/colinhacks/zod.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/node_modules/zod/LICENSE",
+          "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+          "bytes": 1072
+        }
+      ]
+    },
+    {
+      "name": "@paperclipai/shared",
+      "version": "2026.916.1",
+      "license": "MIT",
+      "category": "paperclip-shared",
+      "carrier": "@paperclipai/shared@2026.916.1",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "https://github.com/paperclipai/paperclip",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE",
+          "sha256": "7f8a27f0979bded50e240caa8c8c29f3088ddf87032cb83e5a9732bff91d18b4",
+          "bytes": 1069
+        }
+      ]
+    },
+    {
+      "name": "picocolors",
+      "version": "1.1.1",
+      "license": "ISC",
+      "category": "runtime-transitive",
+      "carrier": "picocolors@1.1.1",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "alexeyraspopov/picocolors",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE",
+          "sha256": "6582629e2979466878f6014313dcc2f3756c9616148682227ce3063dde310750",
+          "bytes": 787
+        }
+      ]
+    },
+    {
+      "name": "zod",
+      "version": "4.6.7",
+      "license": "MIT",
+      "category": "runtime-transitive",
+      "carrier": "zod@4.6.7",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "git+https://github.com/colinhacks/zod.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE",
+          "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+          "bytes": 1072
+        }
+      ]
+    },
+    {
+      "name": "expect-type",
+      "version": "1.4.0",
+      "license": "Apache-2.0",
+      "category": "development",
+      "carrier": "expect-type@1.4.0",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "https://github.com/mmkal/expect-type.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE",
+          "sha256": "7c6cc83c84eaa249a85bf12fe3eedd831bb50c696e8890b5248223ae68c7b408",
+          "bytes": 10760
+        }
+      ]
+    },
+    {
+      "name": "siginfo",
+      "version": "2.0.0",
+      "license": "ISC",
+      "category": "development",
+      "carrier": "siginfo@2.0.0",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "git+https://github.com/emilbayes/siginfo.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE",
+          "sha256": "3bdddf0b9b08aaa2fe4365b803fc958ed32c0597ca0bd727be8d9fcb8b248d18",
+          "bytes": 744
+        }
+      ]
+    },
+    {
+      "name": "source-map-js",
+      "version": "1.2.2",
+      "license": "BSD-3-Clause",
+      "category": "development",
+      "carrier": "source-map-js@1.2.2",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "7rulnik/source-map-js",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE",
+          "sha256": "6cb0631f71c7749763fd3dd1d5bee52dd1070ec17f2edc1710079ad070bd2fbd",
+          "bytes": 1526
+        }
+      ]
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "category": "development",
+      "carrier": "typescript@5.9.3",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "https://github.com/microsoft/TypeScript.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE.txt",
+          "sha256": "a7d00bfd54525bc694b6e32f64c7ebcf5e6b7ae3657be5cc12767bce74654a47",
+          "bytes": 9197
+        },
+        {
+          "kind": "THIRD-PARTY-NOTICE",
+          "source": "tarball",
+          "path_in_tarball": "package/ThirdPartyNoticeText.txt",
+          "sha256": "1af3c68039c57e539422da82a4faada506ce6d0ea6f90e0b699d02dbcdb7a90c",
+          "bytes": 37824
+        }
+      ]
+    },
+    {
+      "name": "vite",
+      "version": "7.3.7",
+      "license": "MIT",
+      "category": "development",
+      "carrier": "vite@7.3.7",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "git+https://github.com/vitejs/vite.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE.md",
+          "sha256": "a77a1c089806b39ad339535bdf3677f636c91d96693e8ad7b11fe733f650ea64",
+          "bytes": 101176
+        }
+      ]
+    },
+    {
+      "name": "vitest",
+      "version": "3.2.7",
+      "license": "MIT",
+      "category": "development",
+      "carrier": "vitest@3.2.7",
+      "bundled": false,
+      "manifest_path_in_tarball": "package/package.json",
+      "repository": "git+https://github.com/vitest-dev/vitest.git",
+      "files": [
+        {
+          "kind": "LICENSE",
+          "source": "tarball",
+          "path_in_tarball": "package/LICENSE.md",
+          "sha256": "6b861d7554fbc8488a08ee59e613bd488785a2e27bd87b80142e5125abec6f4c",
+          "bytes": 34974
+        }
+      ]
+    }
+  ]
+}

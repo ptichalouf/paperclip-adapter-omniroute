@@ -47,5 +47,5 @@ Targeted red/green observations: invariant prompt failed with two system variant
 - Context metadata can itself be wrong; TTL bounds staleness but cannot verify upstream capacity. Direct-model offline hints remain hints.
 - An unsuccessful withdrawal requires inspection/remediation; the adapter does not guarantee remote rollback.
 - The A12 audit remains environment-sensitive. Both normal and no-ripgrep executions passed locally, but that is not a universal performance guarantee.
-- Node 20/22 CI must be read separately; local Node 26 success is not a substitute for CI.
+- Historical local results above are not current CI evidence. The repository now requires Node >=22.15 (the Node provided by Paperclip); CI runs on Node 22 and 24.
 - This candidate was validated and merged into main as release v1.3.0.

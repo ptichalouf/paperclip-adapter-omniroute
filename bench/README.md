@@ -1,6 +1,6 @@
 # Banc de mesure de l'adaptateur `omniroute_native`
 
-Banc rejoué à chaque version (Paperclip ACC-2303, ACC-2309, ACC-2290). Deux parties :
+Banc rejoué à chaque version sur une instance de test. Deux parties :
 
 1. **Banc de tâches** (`taches/T*.json`, `lancer.py`) — 9 tâches réalistes, chacune avec un critère de
    réussite vérifié automatiquement (fichier du workspace, commentaire, document, sous-tâche, statut…).
@@ -17,8 +17,8 @@ OmniRoute, et du jeton d'authentification (`~/.paperclip/token` ou variable `BAN
 
 | Id | Tâche | Critère vérifié |
 |---|---|---|
-| T01 | Question d'avis (prompt d'ACC-2277) | commentaire ≥ 800 caractères citant coordinateur et spécialistes ; ticket done/in_review |
-| T02 | Lire ACC-2298 et le résumer | commentaire contenant « Prompt v2 » et « cache » ; done |
+| T01 | Question d’avis (organisation synthétique) | commentaire ≥ 800 caractères citant coordinateur et spécialistes ; ticket done/in_review |
+| T02 | Lire TASK-1002 et le résumer | commentaire contenant « Prompt v2 » et « cache » ; done |
 | T03 | Livrer document + commentaire + statut | document `plan` avec 3 étapes et « vérification » ; commentaire ; done |
 | T04 | Créer puis modifier un fichier | `config.json` final = `{"version":2,"nom":"banc","etapes":["lire","ecrire"]}` |
 | T05 | Recherche dans des fichiers | `resultat.txt` = les 6 fichiers contenant `ERREUR-7731` |
@@ -28,7 +28,7 @@ OmniRoute, et du jeton d'authentification (`~/.paperclip/token` ou variable `BAN
 | T09 | Reprise sur commentaire de suivi | 2 réveils, `etape1.txt` = un, `etape2.txt` = deux, done |
 
 Chaque tâche n'écrit que sous `banc/<tag>/` dans le workspace de l'agent de test. Les tickets sont des
-enfants de la tâche ACC-2303 (projet « Adaptateur OmniRoute natif »), assignés à l'agent de test seulement.
+enfants de `parentIssueId` du `bench/config.json`, assignés à `agentId` de test seulement. Remplacer tous les UUID d’exemple de la configuration avant usage. T02 attend un ticket de test `TASK-1002` contenant les mots « Prompt v2 » et « cache » ; adapter cette référence à l’instance, sans utiliser de ticket client.
 
 ## Rejouer le banc à la prochaine version
 

@@ -155,16 +155,20 @@ describe('lot 9 — liste des outils', () => {
       'paperclip_get_approval',
       'paperclip_list_attachments',
       'paperclip_get_attachment_text',
+      'paperclip_register_deliverable',
+      'paperclip_list_deliverables',
+      'paperclip_get_instructions',
+      'paperclip_search_tasks',
     ]) {
       expect(names).toContain(expected);
     }
     // Sans outils runtime : pas d'outils de connexion.
     expect(names).not.toContain('connections_search');
-    expect(names.length).toBeLessThanOrEqual(20);
-    // Descriptions sobres : budget total mesuré dans le rapport.
+    expect(names.length).toBeLessThanOrEqual(24);
+    // Descriptions sobres : budget total maîtrisé (<13k pour 23 outils, soit <570 car./outil).
     for (const runtimeTools of [null, { connectionsSearchUrl: 'http://localhost/search', connectionRequestUrl: 'http://localhost/request', bearerToken: RT_TOKEN }]) {
       const specChars = JSON.stringify([...tools({ runtimeTools }).values()].map((t) => t.spec)).length;
-      expect(specChars).toBeLessThan(12000);
+      expect(specChars).toBeLessThan(13000);
     }
   });
 

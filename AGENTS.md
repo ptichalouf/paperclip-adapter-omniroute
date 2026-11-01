@@ -21,7 +21,7 @@ Contrairement aux adaptateurs CLI comme `claude_local` qui lancent un sous-proce
 
 ## 2. Commandes de développement et vérification
 
-Le projet est un monorepo géré avec **pnpm**.
+Prérequis : **Node.js >=22.15**, **pnpm 9.12.0**, **Python >=3.10**, Git et les utilitaires POSIX (bash, tar, sha256sum). L’adaptateur tourne dans le Node fourni par Paperclip. Le projet est un monorepo pnpm ; lancer les commandes suivantes depuis la racine d’un clone propre.
 
 ```bash
 # 1. Installation des dépendances (ignorer les scripts tiers au premier abord)
@@ -42,6 +42,10 @@ pnpm --filter @agence/omniroute-native run verify
 # 6. Suites de banc et déploiement hors ligne (Python 3)
 python3 -m unittest discover -s bench -q
 python3 -m unittest discover -s deploy/tests -q
+
+# 7. Contrôle des résidus, régressions du garde et licences tierces
+bash scripts/check-anti-leak.sh
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
 ```
 
 > **Règle absolue pour tout agent IA** : aucune modification ne doit être proposée ou soumise sans que `typecheck`, `build`, `test` et les scripts de vérification ne soient passés avec un code de sortie 0.

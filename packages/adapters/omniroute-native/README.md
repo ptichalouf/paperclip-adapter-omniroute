@@ -22,6 +22,8 @@ a pas : c'est un fournisseur HTTP sans état. Il faut donc porter soi-même :
 
 ## Installation
 
+Node.js >=22.15 et pnpm 9.12.0 sont requis. L’adaptateur tourne dans le Node fourni par Paperclip.
+
 Le paquet est chargé par le `plugin-loader` de Paperclip, qui exige :
 
 1. `createServerAdapter()` exporté à la racine de `exports["."]` ;
@@ -43,7 +45,7 @@ l'autre serait un réglage silencieusement inopérant.
 | Champ | Défaut | Rôle |
 | --- | --- | --- |
 | `baseUrl` | `http://localhost:20128` | Racine de la passerelle, sans `/v1`. Repli sur `OMNIROUTE_BASE_URL` puis `ANTHROPIC_BASE_URL`. |
-| `apiKey` | — | Envoyée en `Authorization: Bearer`. Repli sur `OMNIROUTE_API_KEY` puis `ANTHROPIC_API_KEY`. |
+| `apiKey` | — | Clé Bearer HTTP. Repli sur `OMNIROUTE_API_KEY` puis `ANTHROPIC_API_KEY`. |
 | `model` | `auto/best-coding` | Identifiant avec préfixe de fournisseur (`claude/claude-sonnet-5`) ou combo `auto/*`. |
 | `fallbackModel` | — | Repli si `model` est introuvable côté passerelle. Vide = échec explicite. |
 | `reasoningEffort` | `high` | `reasoning_effort` Chat Completions : none/low/medium/high. `none` = champ omis. Relance sans en cas de refus amont. |
@@ -85,7 +87,7 @@ transcript et `resultJson.escalations: [{from, to, reason, turnsBefore}]`, plus 
 est cumulé sur toutes les tentatives. `fallbackModel` reste le repli de **disponibilité** ;
 l'escalade porte sur la **qualité**.
 
-L'authentification se fait par `Authorization: Bearer`. La passerelle **refuse**
+L'authentification utilise le schéma HTTP Bearer. La passerelle **refuse**
 `x-api-key` (401) — n'essayez pas de basculer sur ce schéma.
 
 `PAPERCLIP_API_KEY` n'est **jamais** lue depuis la config : le jeton vient

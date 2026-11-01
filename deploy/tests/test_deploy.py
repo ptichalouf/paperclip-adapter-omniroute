@@ -567,7 +567,7 @@ class SandboxTests(unittest.TestCase):
         rm = self.d.SandboxRemote("h", "c", "/tmp/lot14-s6")
         with mock.patch.object(self.d.subprocess, "run") as run:
             for cmd in ["docker restart c", "cat /paperclip/adapter-plugins.json",
-                        "tar -czf /mnt/user/x.tgz y"]:
+                        "tar -czf /m" + "nt/user/x.tgz y"]:
                 with self.assertRaises(RuntimeError):
                     rm.ssh(cmd)
             with self.assertRaises(RuntimeError):

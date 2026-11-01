@@ -1,7 +1,6 @@
 # Paperclip OmniRoute Native Adapter (`omniroute_native`)
 
 [![CI](https://github.com/ptichalouf/paperclip-adapter-omniroute/actions/workflows/ci.yml/badge.svg)](https://github.com/ptichalouf/paperclip-adapter-omniroute/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-572%20passed-brightgreen.svg)](./packages/adapters/omniroute-native/test)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![AI Agent Friendly](https://img.shields.io/badge/AI%20Agent-Friendly%20(AGENTS.md)-blueviolet.svg)](./AGENTS.md)
 
@@ -24,6 +23,8 @@
 ---
 
 ## Quickstart / Démarrage Rapide
+
+Prérequis : **Node.js >=22.15** et **pnpm 9.12.0** (Python >=3.10 pour les tests hors ligne). L’adaptateur tourne dans le Node fourni par Paperclip ; la CI vérifie Node 22 et 24. Le badge CI ci-dessus est dynamique, sans compteur de tests figé.
 
 ### 1. Cloner et compiler l'adaptateur
 
@@ -87,9 +88,9 @@ Consultez **[AGENTS.md](./AGENTS.md)** pour :
 
 Consultez **[ROADMAP.md](./ROADMAP.md)** pour le suivi des jalons :
 - **v1.0** : Moteur natif complet, outils de code, prompt caching, coût réel *(Livré)*.
-- **v1.1** : Intégration des connecteurs MCP (`ctx.runtimeMcp` : GitHub, Cloudflare, DBs).
-- **v1.2** : Cartes décisionnelles natives Paperclip (`ask_user_questions`, `request_confirmation`).
-- **v1.3** : Prompt système invariant à 100 % et fenêtre de contexte dynamique.
+- **v1.1** : Connecteurs MCP (`ctx.runtimeMcp`) — inclus dans v1.3.0.
+- **v1.2** : Cartes décisionnelles (`paperclip_ask_user`, `paperclip_request_confirmation`) — incluses dans v1.3.0.
+- **v1.3** : Prompt système invariant et fenêtre de contexte dynamique — inclus dans v1.3.0.
 - **v1.4** : Sous-tâches locales gratuites DGX Sparks et soumission upstream à `paperclipai/paperclip`.
 
 ---
