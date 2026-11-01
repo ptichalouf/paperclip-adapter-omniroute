@@ -179,6 +179,18 @@ export const configSchema: AdapterConfigSchema = {
       group: 'Exécution',
     },
     {
+      key: 'pluginTools',
+      label: 'Outils des plugins Paperclip',
+      type: 'select',
+      default: 'true',
+      options: [
+        { value: 'true', label: 'true — exposés à l’agent (défaut)' },
+        { value: 'false', label: 'false — non exposés' },
+      ],
+      hint: 'Outils enregistrés par les plugins installés (ex. mémoire Hindsight : hindsight_recall, hindsight_retain), découverts au début du run avec la clé de l’agent.',
+      group: 'Exécution',
+    },
+    {
       key: 'systemPrompt',
       label: 'Prompt système',
       type: 'textarea',

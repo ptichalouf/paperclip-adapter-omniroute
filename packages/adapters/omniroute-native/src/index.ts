@@ -125,4 +125,13 @@ Tous sont confinés au répertoire de run, refusent les fichiers de secrets
 (\`.env\`, clés privées, \`.ssh\`, \`.aws\`…) et **n'exécutent aucun
 \`git push\`** : le workspace local est la source de vérité et aucun distant
 n'est supposé exister.
+
+### Outils des plugins Paperclip
+
+- \`pluginTools\` — \`true\` par défaut, \`false\` pour les couper. Au début
+  du run, l'adaptateur lit \`GET /api/plugins/tools\` avec la clé de l'agent et
+  expose ces outils (ex. \`hindsight_recall\`, \`hindsight_retain\`) ; l'appel
+  passe par \`POST /api/plugins/tools/execute\` avec le contexte du run. Le nom
+  court est gardé s'il est libre, sinon \`plugin_<plugin>__<outil>\`. Un run
+  sans projet n'en reçoit aucun (le serveur exige \`projectId\`).
 `;

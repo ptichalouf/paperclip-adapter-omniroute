@@ -81,6 +81,7 @@ import {
   paperclipToolsOptionsFromEnv,
 } from './paperclip-tools.js';
 import { buildMcpBridgeTools } from './mcp-bridge.js';
+import { discoverPluginTools } from './plugin-tools.js';
 
 export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteExecutionResult> {
   // Le serveur fournit `onProviderStopped`, que les types de la version liée
@@ -357,15 +358,31 @@ export async function execute(ctx: AdapterExecutionContext): Promise<OmniRouteEx
     : [];
 
   const shellEnv = agentShellEnv(ctx);
+  const paperclipOptions = paperclipToolsOptionsFromEnv(shellEnv, signal);
   const tools = [
     ...buildWorkspaceTools(workspaceCwd, signal, shellEnv),
     // Lot 9 — outils Paperclip directs : même source que le shell (URL,
     // identité, run id, jeton de run), jeton jamais renvoyé au modèle.
-    ...buildPaperclipTools(paperclipToolsOptionsFromEnv(shellEnv, signal)),
+    ...buildPaperclipTools(paperclipOptions),
     ...mcpBridgeTools,
     ...(skillMounts.length > 0 ? [buildReadSkillTool(skillMounts)] : []),
     ...(instructions ? [buildReadInstructionsTool(instructions)].filter((t) => t !== null) : []),
   ];
+  // Outils des plugins Paperclip (ex. mémoire Hindsight) : découverts une fois
+  // par run, ajoutés en dernier ; les noms ci-dessus gardent la priorité.
+  if (config.pluginTools) {
+    const projectId = (ctx.context as Record<string, unknown> | undefined)?.['projectId'];
+    const plugins = await discoverPluginTools({
+      ...paperclipOptions,
+      projectId: typeof projectId === 'string' && projectId.trim() ? projectId.trim() : null,
+      reservedNames: tools.map((t) => t.spec.name),
+      executeTimeoutMs: config.timeoutSec ? Math.min(30_000, config.timeoutSec * 1000) : undefined,
+    });
+    tools.push(...plugins.tools);
+    if (plugins.tools.length > 0 || plugins.skipped.length > 0 || (plugins.note && paperclipToolsAvailability(paperclipOptions).paperclip)) {
+      await log('stdout', `[omniroute_native] outils de plugin : ${plugins.tools.length > 0 ? plugins.tools.map((t) => t.spec.name).join(', ') : `aucun (${plugins.note ?? 'aucun'})`}${plugins.skipped.length > 0 ? ` ; écartés : ${plugins.skipped.join(', ')}` : ''}`);
+    }
+  }
 
   const system = buildSystemPrompt(ctx, instructions, skillMounts);
   await endConfigureSession('ok');
