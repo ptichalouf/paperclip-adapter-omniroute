@@ -63,10 +63,10 @@ describe('detectsWorkspaceEscape — le shell reste dans le workspace', () => {
   it('laisse passer les URL, qui ne sont pas des chemins', () => {
     // Régression trouvée par la recette ACC-2253 : l'agent ne pouvait plus
     // appeler une URL en shell, et tournait en boucle sur des refus.
-    expect(detectsWorkspaceEscape('curl -s http://192.168.1.11:3100/health')).toBe(false);
+    expect(detectsWorkspaceEscape('curl -s http://127.0.0.1:3100/health')).toBe(false);
     expect(detectsWorkspaceEscape('curl -s https://exemple.test/api/v1')).toBe(false);
     expect(detectsWorkspaceEscape('wget https://exemple.test/a/../b')).toBe(false);
-    expect(detectsWorkspaceEscape('curl -sS -X POST http://192.168.1.10:20128/v1/chat/completions')).toBe(false);
+    expect(detectsWorkspaceEscape('curl -sS -X POST http://127.0.0.1:20128/v1/chat/completions')).toBe(false);
     expect(detectsWorkspaceEscape('echo "http://exemple.test"')).toBe(false);
   });
 

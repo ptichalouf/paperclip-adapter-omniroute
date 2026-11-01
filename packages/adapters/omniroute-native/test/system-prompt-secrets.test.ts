@@ -13,12 +13,12 @@ function contextWithSecrets() {
     runId: 'run-1',
     authToken: 'SECRET-RUN-JWT-0001',
     runtimeTools: {
-      mcpEndpoint: 'http://192.168.1.11:3100/mcp/runtime-tools',
+      mcpEndpoint: 'http://127.0.0.1:3100/mcp/runtime-tools',
       bearerToken: 'SECRET-TOOLS-BEARER-0002',
       expiresAt: '2030-01-01T00:00:00.000Z',
       rest: {
-        connectionsSearch: 'http://192.168.1.11:3100/api/runtime-tools/connections/search',
-        connectionRequest: 'http://192.168.1.11:3100/api/runtime-tools/connections/request',
+        connectionsSearch: 'http://127.0.0.1:3100/api/runtime-tools/connections/search',
+        connectionRequest: 'http://127.0.0.1:3100/api/runtime-tools/connections/request',
       },
       tools: ['gitea', 'nextcloud-mcp'],
       guidance: 'GUIDANCE-TEXT-0003',

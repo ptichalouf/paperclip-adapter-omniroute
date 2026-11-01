@@ -15,17 +15,17 @@ Contrairement aux adaptateurs CLI comme `claude_local` qui lancent un sous-proce
 - Exécute la boucle d'outils (modèle ↔ outils de workspace et d'API Paperclip) de manière autonome.
 - Supporte le routage par **combos personnels (`AC-*`)** et génériques (**`auto/*`**).
 - Implémente la sous-délégation (`subtask` sur modèle rapide/local) et l'escalade automatique de modèle en cas d'échec objectif.
-- Gère la tarification exacte en temps réel d'après le barème officiel OmniRoute.
+- Gère l'estimation des coûts via le barème officiel OmniRoute (`rate_card`).
 
 ---
 
 ## 2. Commandes de développement et vérification
 
-Le projet est un monorepo géré avec **pnpm**.
+Prérequis : **Node.js >=22.15**, **pnpm 9.12.0**, **Python >=3.10**, Git et les utilitaires POSIX (bash, tar, sha256sum). L’adaptateur tourne dans le Node fourni par Paperclip. Le projet est un monorepo pnpm ; lancer les commandes suivantes depuis la racine d’un clone propre.
 
 ```bash
-# 1. Installation des dépendances (strictement sans scripts tiers dangereux)
-pnpm install --frozen-lockfile
+# 1. Installation des dépendances (ignorer les scripts tiers au premier abord)
+pnpm install --frozen-lockfile --ignore-scripts
 
 # 2. Vérification statique des types TypeScript (0 erreur tolérée)
 pnpm run typecheck
@@ -37,9 +37,15 @@ pnpm run build
 pnpm run test
 
 # 5. Vérification des invariants de paquet et de contrat UI Paperclip
-cd packages/adapters/omniroute-native
-node test/load-path.verify.mjs
-node test/ui-parser.verify.mjs
+pnpm --filter @agence/omniroute-native run verify
+
+# 6. Suites de banc et déploiement hors ligne (Python 3)
+python3 -m unittest discover -s bench -q
+python3 -m unittest discover -s deploy/tests -q
+
+# 7. Contrôle des résidus, régressions du garde et licences tierces
+bash scripts/check-anti-leak.sh
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
 ```
 
 > **Règle absolue pour tout agent IA** : aucune modification ne doit être proposée ou soumise sans que `typecheck`, `build`, `test` et les scripts de vérification ne soient passés avec un code de sortie 0.
@@ -58,13 +64,17 @@ Tous les fichiers sources vivent sous `packages/adapters/omniroute-native/src/` 
 | `server/agent-loop.ts` | Boucle multi-tours modèle ↔ outils, surveillance de boucle bloquée et reprise d'escalade. |
 | `server/tools.ts` | Outils de fichiers et shell (`read_file`, `write_file`, `edit_file`, `grep`, `glob`, `list_dir`, `shell`). |
 | `server/paperclip-tools.ts` | Outils natifs Paperclip (`paperclip_get_issue`, `paperclip_update_issue`, `paperclip_add_comment`, etc.). |
-| `server/subtask.ts` | Moteur de sous-tâche déléguée (lecture seule, modèle rapide comme `AC-task` ou local). |
+| `server/mcp-bridge.ts` | Intégration de la passerelle MCP (`ctx.runtimeMcp`) avec outils virtuels et préservation du prompt. |
+| `server/decision-cards.ts` | Cartes d'interaction interactive Paperclip (`paperclip_ask_user`, `paperclip_request_confirmation`). |
+| `server/subtask.ts` | Moteur de sous-tâche déléguée (lecture seule, modèle rapide ou local). |
 | `server/escalation.ts` | Moteur d'escalade progressive vers un modèle supérieur en cas d'échec réel. |
-| `server/models.ts` | Découverte et filtrage strict des combos (`auto/*` et `AC-*`), cache disque et mémoire. |
+| `server/models.ts` | Découverte et filtrage des combos (`auto/*` et personnalisés), cache disque et mémoire avec TTL. |
 | `server/session-store.ts` | Persistance atomique et sécurisée des sessions et verrouillage concurrentiel. |
+| `server/session-codec.ts` | Sérialisation et validation des états de session. |
 | `shared/client.ts` | Client HTTP/SSE vers OmniRoute, surveillance anti-figeage (`StreamWatchdog`). |
 | `shared/chat-completions.ts` | Conversion de fil de messages vers OpenAI, normalisation du cache Paperclip. |
-| `shared/pricing.ts` | Barème tarifaire officiel OmniRoute et calcul du coût exact sans double facturation. |
+| `shared/context-window.ts` | Gestion dynamique de la fenêtre de contexte selon le modèle résolu et découverte de métadonnées. |
+| `shared/pricing.ts` | Barème tarifaire officiel OmniRoute et calcul du coût estimé. |
 
 ---
 
@@ -77,7 +87,7 @@ Tout contributeur IA doit respecter rigoureusement ces invariants :
 - Tout chemin résolu en dehors du répertoire de travail du run doit lever une `ToolRefusal`.
 - **Liens symboliques pendants** : un lien dont la cible n'existe pas ne doit jamais permettre une écriture vers l'extérieur.
 - **Masquage des secrets** : toute clé API, jeton, ou mot de passe doit être expurgé (`redactSecrets`) avant d'être persisté dans la session ou renvoyé dans les sorties.
-- Le shell local refuse formellement les commandes de publication distante (`git push`, etc.) : le workspace local est la seule source de vérité.
+- **Confinement du shell** : le shell local lance `/bin/sh -c` dans le répertoire du workspace et dispose de garde-fous applicatifs (refus de publication distante `git push`, refus des commandes destructrices). **Attention** : ce n'est pas une sandbox OS hermétique. Tout déploiement ou test doit s'effectuer dans un conteneur ou environnement jetable, sans accès à des réseaux internes ni credentials sensibles.
 
 ### B. Contrat de Cache OmniRoute
 - L'en-tête `User-Agent` doit obligatoirement inclure la sous-chaîne **`sdk-cli`** (condition requise par `isClaudeCodeClient` dans OmniRoute pour préserver les marqueurs `cache_control`).

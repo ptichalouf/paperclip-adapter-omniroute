@@ -72,9 +72,9 @@ describe('secu — masquage des motifs de secrets', () => {
   it('ne masque pas le texte ordinaire', async () => {
     const { redactSecrets } = await loadRedactor();
     const text = [
-      'PAPERCLIP_TASK_ID=ACC-2300',
+      'PAPERCLIP_TASK_ID=TASK-2300',
       'PAPERCLIP_API_URL=http://paperclip:3100',
-      'GIT_AUTHOR_NAME=ac-dev-bot',
+      'GIT_AUTHOR_NAME=paperclip-bot',
       'max_tokens: 4096',
       'https://gitea.example/repo.git',
       'Tests 242 passed',

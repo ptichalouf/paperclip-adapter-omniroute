@@ -17,30 +17,30 @@ Feuille de route publique du projet `paperclip-adapter-omniroute` (adaptateur na
 - [x] **Menus de sélection ergonomiques** : deux menus déroulants pour l'escalade, option « aucun — désactivé », options secondaires repliées.
 - [x] **Optimisation du cache (>92 %)** : en-tête `sdk-cli`, marqueur `cache_control` sur le dernier message, verrou anti-compression.
 - [x] **Démarrage instantané** : élimination du téléchargement de 9,3 Mo au lancement du run (temps de démarrage divisé par 4).
-- [x] **Tarification exacte** : calcul automatique des coûts réels via le barème officiel OmniRoute (`rate_card`).
+- [x] **Tarification sur barème** : calcul automatique des coûts estimés via le barème officiel OmniRoute (`rate_card`).
 
 ---
 
-###  Version 1.1 — Connecteurs MCP et Outils d'Entreprise
-- [ ] **Passerelle d'outils MCP (`ctx.runtimeMcp`)** : brancher les profils d'outils liés à l'agent (GitHub, Gitea, Cloudflare, bases de données, hubs MCP) directement dans l'adaptateur via la passerelle d'outils Paperclip (`search_tools` et `run_tool`).
-- [ ] **Préservation du cache avec les outils virtuels** : ne pas charger 100 définitions d'outils dans le prompt, utiliser les outils virtuels à la demande pour garder le prompt court.
+###  Version 1.1 — Connecteurs MCP et Outils d'Entreprise (Livré — v1.3.0)
+- [x] **Passerelle d'outils MCP (`ctx.runtimeMcp`)** : brancher les profils d'outils liés à l'agent (GitHub, Gitea, Cloudflare, bases de données, hubs MCP) directement dans l'adaptateur via la passerelle d'outils Paperclip (`search_tools` et `run_tool`).
+- [x] **Préservation du cache avec les outils virtuels** : ne pas charger 100 définitions d'outils dans le prompt, utiliser les outils virtuels à la demande pour garder le prompt court.
 
 ---
 
-###  Version 1.2 — Interactions Décisionnelles et Cartes du Board
-- [ ] **Outil typé `paperclip_ask_user`** : permettre à l'agent de poser un questionnaire ou des choix structurés affichés sous forme de carte interactive sur le tableau de bord Paperclip.
-- [ ] **Outil typé `paperclip_request_confirmation`** : faire valider un plan d'action avant exécution, avec mise en attente propre de la tâche (`in_review`).
+###  Version 1.2 — Interactions Décisionnelles et Cartes du Board (Livré — v1.3.0)
+- [x] **Outil typé `paperclip_ask_user`** : permettre à l'agent de poser un questionnaire ou des choix structurés affichés sous forme de carte interactive sur le tableau de bord Paperclip.
+- [x] **Outil typé `paperclip_request_confirmation`** : faire valider un plan d'action avant exécution, avec mise en attente propre de la tâche (`in_review`).
 
 ---
 
-###  Version 1.3 — Optimisation Avancée du Prompt et Contexte Dynamique
-- [ ] **Prompt système 100 % invariant** : sortir toutes les métadonnées dynamiques (date, id de run, passation de session) du message système pour garantir une réutilisation de cache de 100 % dès le premier tour.
-- [ ] **Contexte dynamique d'après `/v1/models/{id}`** : adapter la fenêtre de mémoire de la session à la taille réelle du modèle (32k pour Qwen local, 200k pour Opus, 1M pour Gemini).
+###  Version 1.3 — Optimisation Avancée du Prompt et Contexte Dynamique (Livré — v1.3.0)
+- [x] **Prompt système 100 % invariant** : sortir toutes les métadonnées dynamiques (date, id de run, passation de session) du message système pour maximiser la réutilisation de cache dès le premier tour.
+- [x] **Contexte dynamique d'après `/v1/models/{id}`** : adapter la fenêtre de mémoire de la session à la taille réelle du modèle (32k pour modèles locaux, 200k pour Opus, etc.) avec TTL et portée par passerelle.
 
 ---
 
 ###  Version 1.4 — Sous-Tâches Locales et Intégration Upstream
-- [ ] **Délégation automatique vers DGX Sparks** : routage par défaut des sous-tâches de lecture et de résumé vers les modèles locaux gratuits (`AC-local-fast`), à coût 0 $.
+- [ ] **Délégation automatique vers modèles locaux** : routage configurable des sous-tâches de lecture et de résumé vers les modèles locaux gratuits, à coût 0 $.
 - [ ] **Intégration amont** : soumission d'une Pull Request officielle sur le dépôt principal [paperclipai/paperclip](https://github.com/paperclipai/paperclip).
 
 ---

@@ -1,11 +1,11 @@
-# @agence/omniroute-paperclip-adapter
+# @agence/omniroute-native
 
-Adaptateur Paperclip pour la passerelle **OmniRoute** auto-hébergée (Unraid).
+Adaptateur Paperclip pour la passerelle **OmniRoute** auto-hébergée.
 
-OmniRoute expose une API **Anthropic Messages native** (`POST /v1/messages`) et
-agrège plusieurs centaines de modèles derrière des combos `auto/*`. Cet
+OmniRoute expose une API compatible **OpenAI Chat Completions** (`POST /v1/chat/completions`) et
+agrège plusieurs modèles derrière des combos `auto/*` et personnalisés. Cet
 adaptateur fait tourner un agent Paperclip directement sur cette API — sans CLI
-intermédiaire — en réutilisant le protocole d'outils Anthropic.
+intermédiaire — en streaming SSE avec détection de flux figé et gestion du cache.
 
 ## Pourquoi un adaptateur et pas une simple config de base URL
 
@@ -21,6 +21,8 @@ a pas : c'est un fournisseur HTTP sans état. Il faut donc porter soi-même :
 - le **rendu du transcript** côté UI.
 
 ## Installation
+
+Node.js >=22.15 et pnpm 9.12.0 sont requis. L’adaptateur tourne dans le Node fourni par Paperclip.
 
 Le paquet est chargé par le `plugin-loader` de Paperclip, qui exige :
 
@@ -42,8 +44,8 @@ l'autre serait un réglage silencieusement inopérant.
 
 | Champ | Défaut | Rôle |
 | --- | --- | --- |
-| `baseUrl` | `$(OMNIROUTE_BASE_URL:-http://localhost:20128)` | Racine de la passerelle, sans `/v1`. Repli sur `OMNIROUTE_BASE_URL` puis `ANTHROPIC_BASE_URL`. |
-| `apiKey` | — | Envoyée en `Authorization: Bearer`. Repli sur `OMNIROUTE_API_KEY` puis `ANTHROPIC_API_KEY`. |
+| `baseUrl` | `http://localhost:20128` | Racine de la passerelle, sans `/v1`. Repli sur `OMNIROUTE_BASE_URL` puis `ANTHROPIC_BASE_URL`. |
+| `apiKey` | — | Clé Bearer HTTP. Repli sur `OMNIROUTE_API_KEY` puis `ANTHROPIC_API_KEY`. |
 | `model` | `auto/best-coding` | Identifiant avec préfixe de fournisseur (`claude/claude-sonnet-5`) ou combo `auto/*`. |
 | `fallbackModel` | — | Repli si `model` est introuvable côté passerelle. Vide = échec explicite. |
 | `reasoningEffort` | `high` | `reasoning_effort` Chat Completions : none/low/medium/high. `none` = champ omis. Relance sans en cas de refus amont. |
@@ -85,7 +87,7 @@ transcript et `resultJson.escalations: [{from, to, reason, turnsBefore}]`, plus 
 est cumulé sur toutes les tentatives. `fallbackModel` reste le repli de **disponibilité** ;
 l'escalade porte sur la **qualité**.
 
-L'authentification se fait par `Authorization: Bearer`. La passerelle **refuse**
+L'authentification utilise le schéma HTTP Bearer. La passerelle **refuse**
 `x-api-key` (401) — n'essayez pas de basculer sur ce schéma.
 
 `PAPERCLIP_API_KEY` n'est **jamais** lue depuis la config : le jeton vient
@@ -136,9 +138,9 @@ requête HTTP à la main dans le shell :
 ## Vérification
 
 ```sh
-pnpm --filter @agence/omniroute-paperclip-adapter typecheck
-pnpm --filter @agence/omniroute-paperclip-adapter build
-pnpm --filter @agence/omniroute-paperclip-adapter verify
+pnpm --filter @agence/omniroute-native typecheck
+pnpm --filter @agence/omniroute-native build
+pnpm --filter @agence/omniroute-native verify
 ```
 
 `verify` rejoue les deux chemins de chargement réels :
