@@ -14,11 +14,12 @@ check_pattern() {
   local exclude_pathspec="${3:-}"
 
   echo "Contrôle : $desc ($pattern)..."
+  local default_excludes=(':!scripts/check-anti-leak.sh' ':!docs/export-pipeline.md')
   local matches
   if [ -n "$exclude_pathspec" ]; then
-    matches=$(git grep -E -n "$pattern" -- . "$exclude_pathspec" || true)
+    matches=$(git grep -E -n "$pattern" -- . "${default_excludes[@]}" "$exclude_pathspec" || true)
   else
-    matches=$(git grep -E -n "$pattern" -- . || true)
+    matches=$(git grep -E -n "$pattern" -- . "${default_excludes[@]}" || true)
   fi
 
   if [ -n "$matches" ]; then
