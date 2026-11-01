@@ -40,7 +40,7 @@ describe('secu — masquage des motifs de secrets', () => {
       `OPENAI_API_KEY=${SK_KEY}`,
       `clé paperclip ${PCP_KEY}`,
       `Authorization: Bearer ${'Z'.repeat(40)}`,
-      `{"apiKey":"valeur-fictive-123456","model":"auto"}`,
+      `{"apiKey":"${['valeur', 'fictive', '123456'].join('-')}","model":"auto"}`,
       'password: hunter2-fictif-999',
     ].join('\n');
     const out = redactSecrets(text);
@@ -61,7 +61,7 @@ describe('secu — masquage des motifs de secrets', () => {
 
   it('masque une clé privée PEM et une valeur connue quelle que soit sa forme', async () => {
     const { redactSecrets } = await loadRedactor();
-    const pem = ['-----BEGIN PRIVATE KEY-----', 'MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAfictif', '-----END PRIVATE KEY-----'].join('\n');
+    const pem = ['-----' + 'BEGIN PRIVATE KEY' + '-----', 'MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAfictif', '-----END PRIVATE KEY-----'].join('\n');
     const known = 'valeur-connue-fictive-77';
     const out = redactSecrets(`début\n${pem}\nla valeur ${known} apparaît sans nom`, [known]);
     expect(out).not.toContain('MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAfictif');

@@ -207,9 +207,14 @@ interface AttemptResult extends Omit<AgentLoopResult, 'subtasks' | 'escalations'
   model: string;
 }
 
+type CheckpointUsage = Pick<AgentLoopResult,
+  'turns' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens' | 'costUsd' | 'costTurnsMissing'>;
+
 interface AttemptControl {
   /** Arrêter la boucle sur erreurs d'outil identiques ? (vrai seulement si une escalade est possible) */
   stopOnStuck?: (currentModel: string) => boolean;
+  /** Usage hors tentative courante, lu au moment du checkpoint uniquement. */
+  checkpointOffset?: () => CheckpointUsage;
 }
 
 /**
@@ -272,7 +277,21 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
   const attempts: AttemptResult[] = [];
   let attemptOptions: AgentLoopOptions = { ...options, tools };
   for (;;) {
-    const attempt = await runLoopAttempt(attemptOptions, { stopOnStuck: (model) => nextRung(model) !== null });
+    const attempt = await runLoopAttempt(attemptOptions, {
+      stopOnStuck: (model) => nextRung(model) !== null,
+      // Lu après les outils : childUsage peut augmenter pendant cette tentative.
+      // Les résultats de tentative restent locaux, sinon le total final doublerait l’offset.
+      checkpointOffset: () => attempts.reduce<CheckpointUsage>((total, previous) => ({
+        turns: total.turns + previous.turns,
+        inputTokens: total.inputTokens + previous.inputTokens,
+        outputTokens: total.outputTokens + previous.outputTokens,
+        cacheReadTokens: total.cacheReadTokens + previous.cacheReadTokens,
+        cacheWriteTokens: total.cacheWriteTokens + previous.cacheWriteTokens,
+        costTurnsMissing: total.costTurnsMissing + previous.costTurnsMissing,
+        costUsd: total.costUsd === null && previous.costUsd === null
+          ? null : (total.costUsd ?? 0) + (previous.costUsd ?? 0),
+      }), { ...childUsage, turns: 0 }),
+    });
     attempts.push(attempt);
     tried.add(attempt.model);
 
@@ -539,9 +558,18 @@ async function runLoopAttempt(options: AgentLoopOptions, control: AttemptControl
 
     // Point de contrôle (session + usage) : chaque appel d'outil a sa réponse.
     try {
+      const offset = control.checkpointOffset?.();
       await options.onCheckpoint?.({
-        messages: [...messages], turns, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens,
-        costUsd, costTurnsMissing, servedModel: servedModel ?? currentModel,
+        messages: [...messages],
+        turns: turns + (offset?.turns ?? 0),
+        inputTokens: inputTokens + (offset?.inputTokens ?? 0),
+        outputTokens: outputTokens + (offset?.outputTokens ?? 0),
+        cacheReadTokens: cacheReadTokens + (offset?.cacheReadTokens ?? 0),
+        cacheWriteTokens: cacheWriteTokens + (offset?.cacheWriteTokens ?? 0),
+        costUsd: costUsd === null && offset?.costUsd == null
+          ? null : (costUsd ?? 0) + (offset?.costUsd ?? 0),
+        costTurnsMissing: costTurnsMissing + (offset?.costTurnsMissing ?? 0),
+        servedModel: servedModel ?? currentModel,
       });
     } catch {
       /* un point de contrôle raté ne fait pas échouer le run */
