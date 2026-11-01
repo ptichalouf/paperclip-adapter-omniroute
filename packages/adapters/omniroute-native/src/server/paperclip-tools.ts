@@ -35,6 +35,28 @@ export {
 export const ISSUE_STATUSES = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'blocked', 'cancelled'] as const;
 /** Priorités acceptées par le serveur (`ISSUE_PRIORITIES`). */
 const ISSUE_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
+/** Types de livrables formels (`issueWorkProductTypeSchema`). */
+export const DELIVERABLE_TYPES = [
+  'preview_url',
+  'runtime_service',
+  'pull_request',
+  'branch',
+  'commit',
+  'artifact',
+  'document',
+] as const;
+/** Statuts de livrables (`issueWorkProductStatusSchema`). */
+export const DELIVERABLE_STATUSES = [
+  'active',
+  'ready_for_review',
+  'approved',
+  'changes_requested',
+  'merged',
+  'closed',
+  'failed',
+  'archived',
+  'draft',
+] as const;
 /** Clé de document (`issueDocumentKeySchema`). */
 const DOCUMENT_KEY_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -342,6 +364,24 @@ function attachmentSummary(att: unknown): Record<string, unknown> {
   return out;
 }
 
+function deliverableSummary(deliv: unknown): Record<string, unknown> {
+  return pick(deliv, ['id', 'issueId', 'type', 'provider', 'title', 'status', 'url', 'isPrimary', 'createdAt']);
+}
+
+function searchTaskSummary(item: unknown): Record<string, unknown> {
+  if (!item || typeof item !== 'object') return {};
+  const r = item as Record<string, unknown>;
+  const iss = (r['issue'] && typeof r['issue'] === 'object') ? (r['issue'] as Record<string, unknown>) : {};
+  return {
+    id: iss['id'] ?? r['id'],
+    identifier: iss['identifier'] ?? null,
+    title: iss['title'] ?? r['title'],
+    status: iss['status'] ?? null,
+    priority: iss['priority'] ?? null,
+    snippet: r['snippet'] ? clip(String(r['snippet']), 300) : null,
+  };
+}
+
 /**
  * Réduit une valeur JSON quelconque : chaînes coupées, tableaux limités,
  * profondeur bornée. Sert à `paperclip_api_request` (forme inconnue).
@@ -429,7 +469,7 @@ const enc = encodeURIComponent;
 
 const ISSUE_ID_PROP = {
   type: 'string',
-  description: 'UUID ou identifiant (ACC-123) du ticket. Défaut : le ticket courant.',
+  description: 'UUID ou identifiant (ACC-123). Défaut : ticket courant.',
 };
 
 /**
@@ -523,7 +563,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_list_comments',
-        description: 'Liste les commentaires d’un ticket (défaut : 20 plus récents d’abord ; « after » = id de commentaire pour la suite).',
+        description: 'Liste les commentaires d’un ticket (« after » = id pour pagination).',
         input_schema: {
           type: 'object',
           properties: {
@@ -569,8 +609,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_update_issue',
-        description:
-          `Modifie un ticket (PATCH) : statut (${ISSUE_STATUSES.join('|')}), commentaire joint, priorité, assignation, titre.`,
+        description: 'Modifie un ticket (statut, commentaire joint, priorité, assignation, titre).',
         input_schema: {
           type: 'object',
           properties: {
@@ -605,7 +644,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_list_documents',
-        description: 'Liste les documents d’un ticket (clé, titre, révision, taille), sans leur contenu.',
+        description: 'Liste les documents d’un ticket (sans le contenu).',
         input_schema: { type: 'object', properties: { issueId: ISSUE_ID_PROP } },
       },
       async (input) => {
@@ -617,7 +656,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_get_document',
-        description: `Lit un document de ticket par clé (corps par fenêtres de ${DOCUMENT_WINDOW_CHARS} caractères ; « offset » pour la suite).`,
+        description: `Lit un document par clé (fenêtres ${DOCUMENT_WINDOW_CHARS} car. ; « offset » pour suite).`,
         input_schema: {
           type: 'object',
           properties: {
@@ -646,8 +685,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_write_document',
-        description:
-          'Crée ou remplace un document markdown de ticket. Sans baseRevisionId, la dernière révision est reprise automatiquement.',
+        description: 'Crée ou remplace un document markdown (reprise auto de dernière révision).',
         input_schema: {
           type: 'object',
           properties: {
@@ -676,7 +714,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_create_subtask',
-        description: 'Crée une sous-tâche (défaut : enfant du ticket courant ; projet et objectif hérités du parent).',
+        description: 'Crée une sous-tâche (défaut : enfant du ticket courant).',
         input_schema: {
           type: 'object',
           properties: {
@@ -739,8 +777,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_api_request',
-        description:
-          'Appelle une autre route de l’API Paperclip (chemin relatif à /api, ex. /issues/ACC-1/heartbeat-context). Jeton et run id ajoutés ; réponse réduite. DELETE refusé.',
+        description: 'Appelle une route API Paperclip relative à /api. Jeton et run id inclus. DELETE refusé.',
         input_schema: {
           type: 'object',
           properties: {
@@ -769,8 +806,7 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
     tool(
       {
         name: 'paperclip_deliver',
-        description:
-          'Livre en un appel : document (optionnel), puis commentaire, avec statut (optionnel, même requête que le commentaire). S’arrête au premier échec et dit ce qui est fait ou non.',
+        description: 'Livre document (optionnel), commentaire et statut. S’arrête au premier échec avec bilan.',
         input_schema: {
           type: 'object',
           properties: {
@@ -987,6 +1023,140 @@ export function buildPaperclipTools(options: PaperclipToolsOptions): WorkspaceTo
           ? `[caractères ${offset}-${end} sur ${text.length} — suite avec offset=${end}]`
           : offset > 0 ? `[caractères ${offset}-${end} sur ${text.length} — fin]` : '';
         return `${window ? `${window}\n` : ''}---\n${text.slice(offset, end)}`;
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_register_deliverable',
+        description: 'Enregistre un livrable formel lié au ticket.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            issueId: ISSUE_ID_PROP,
+            type: { type: 'string', enum: [...DELIVERABLE_TYPES] },
+            title: { type: 'string', minLength: 1 },
+            provider: { type: 'string' },
+            url: { type: 'string' },
+            status: { type: 'string', enum: [...DELIVERABLE_STATUSES] },
+            summary: { type: 'string' },
+            isPrimary: { type: 'boolean' },
+            externalId: { type: 'string' },
+            metadata: { type: 'object' },
+          },
+          required: ['type', 'title'],
+        },
+      },
+      async (input) => {
+        const issueId = issueIdOf(input);
+        const title = reqString(input, 'title');
+        const rawType = reqString(input, 'type');
+        if (!DELIVERABLE_TYPES.includes(rawType as (typeof DELIVERABLE_TYPES)[number])) {
+          throw new InputError(`type invalide « ${rawType} » (valeurs : ${DELIVERABLE_TYPES.join(', ')})`);
+        }
+        const body: Record<string, unknown> = {
+          title,
+          type: rawType,
+          provider: optString(input, 'provider') ?? 'paperclip',
+        };
+        for (const key of ['url', 'status', 'summary', 'externalId']) {
+          const val = optString(input, key);
+          if (val) body[key] = val;
+        }
+        if (typeof input['isPrimary'] === 'boolean') body['isPrimary'] = input['isPrimary'];
+        if (input['metadata'] && typeof input['metadata'] === 'object') body['metadata'] = input['metadata'];
+        const res = await api.request('POST', `/issues/${enc(issueId)}/work-products`, { body });
+        return { ok: true, deliverable: deliverableSummary(res.data) };
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_list_deliverables',
+        description: 'Liste les livrables formels du ticket.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            issueId: ISSUE_ID_PROP,
+          },
+        },
+      },
+      async (input) => {
+        const issueId = issueIdOf(input);
+        const res = await api.request('GET', `/issues/${enc(issueId)}/work-products`);
+        const list = Array.isArray(res.data) ? res.data : [];
+        return {
+          count: list.length,
+          deliverables: list.map(deliverableSummary),
+        };
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_get_instructions',
+        description: 'Lit les consignes de profil de cet agent (défaut : AGENTS.md).',
+        input_schema: {
+          type: 'object',
+          properties: {
+            fileName: { type: 'string' },
+            offset: { type: 'integer' },
+          },
+        },
+      },
+      async (input) => {
+        if (!options.agentId) throw new InputError('Identifiant agentId requis pour lire ses consignes');
+        const fileName = optString(input, 'fileName') ?? 'AGENTS.md';
+        const offset = optInt(input, 'offset', 0, Number.MAX_SAFE_INTEGER) ?? 0;
+        const res = await api.request('GET', `/agents/${enc(options.agentId)}/instructions-bundle/file`, {
+          query: { path: fileName },
+        });
+        const raw = res.data;
+        const text = typeof raw === 'string' ? raw : (raw as { content?: string } | null)?.content ?? JSON.stringify(raw);
+        const end = Math.min(text.length, offset + DOCUMENT_WINDOW_CHARS);
+        const window = end < text.length
+          ? `[caractères ${offset}-${end} sur ${text.length} — suite avec offset=${end}]`
+          : offset > 0 ? `[caractères ${offset}-${end} sur ${text.length} — fin]` : '';
+        return `${window ? `${window}\n` : ''}---\n${text.slice(offset, end)}`;
+      },
+    ),
+    tool(
+      {
+        name: 'paperclip_search_tasks',
+        description: 'Recherche les tickets existants de l’entreprise.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            status: { type: 'string' },
+            limit: { type: 'integer' },
+            offset: { type: 'integer' },
+          },
+          required: ['query'],
+        },
+      },
+      async (input) => {
+        if (!options.companyId) throw new InputError('Identifiant companyId requis pour la recherche');
+        const q = reqString(input, 'query');
+        const queryParams: Record<string, string | number> = {
+          q,
+          scope: 'issues',
+        };
+        const status = optString(input, 'status');
+        if (status) queryParams.status = status;
+        const limit = optInt(input, 'limit', 1, 50);
+        if (limit !== undefined) queryParams.limit = limit;
+        const offset = optInt(input, 'offset', 0, 200);
+        if (offset !== undefined) queryParams.offset = offset;
+
+        const res = await api.request('GET', `/companies/${enc(options.companyId)}/search`, {
+          query: queryParams,
+        });
+        const data = (res.data as Record<string, unknown>) ?? {};
+        const results = Array.isArray(data['results']) ? data['results'] : [];
+        return {
+          query: q,
+          count: results.length,
+          hasMore: Boolean(data['hasMore']),
+          tasks: results.map(searchTaskSummary),
+        };
       },
     ),
   ];
