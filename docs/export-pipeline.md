@@ -15,7 +15,7 @@ Créer un commit d'instantané pur AVANT de réappliquer les changements exclusi
 Enregistrer son SHA et la tête publique dans `docs/public-snapshot.json`, dans un commit suivant.
 Le verrou vérifie l'ascendance et l'égalité des arbres : un manifeste déclaratif seul n'est pas une preuve.
 Reporter les changements internes par leur diff exact, jamais par remplacement d'un fichier entier plus récent.
-Ouvrir la PR Gitea. Pas de force-push, de tag, de changement de protection ou de fusion par l'auteur.
+Ouvrir la PR Gitea ; fusion par merge commit pour conserver l'ascendance du snapshot (pas de squash). Pas de force-push, de tag, de changement de protection ou de fusion par l'auteur.
 ## 2. Assainir et vérifier la source candidate
 Conserver MIT, les deux `LICENSE`, les deux `THIRD_PARTY_NOTICES.md` et l'inventaire des dépendances.
 Si les dépendances changent : inventorier les tarballs verrouillés (SHA-512 lockfile = registre = octets), y compris les paquets embarqués, reprendre les textes LICENSE/NOTICE complets et leurs empreintes dans `third-party-inventory.json`. Préserver le NOTICE de `bare-path`, les avis imbriqués et les espaces des textes tiers ; documenter tout recours à une licence amont au commit de provenance. `scripts/test_notices.py` contrôle la couverture et les empreintes des deux notices.
