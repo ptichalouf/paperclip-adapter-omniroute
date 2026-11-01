@@ -65,6 +65,7 @@ Tous les fichiers sources vivent sous `packages/adapters/omniroute-native/src/` 
 | `server/tools.ts` | Outils de fichiers et shell (`read_file`, `write_file`, `edit_file`, `grep`, `glob`, `list_dir`, `shell`). |
 | `server/paperclip-tools.ts` | Outils natifs Paperclip (`paperclip_get_issue`, `paperclip_update_issue`, `paperclip_add_comment`, etc.). |
 | `server/mcp-bridge.ts` | Intégration de la passerelle MCP (`ctx.runtimeMcp`) avec outils virtuels et préservation du prompt. |
+| `server/plugin-tools.ts` | Outils des plugins Paperclip : découverte par run (`GET /api/plugins/tools`), exécution (`POST /api/plugins/tools/execute`), noms sans collision, délai borné, jeton masqué. |
 | `server/decision-cards.ts` | Cartes d'interaction interactive Paperclip (`paperclip_ask_user`, `paperclip_request_confirmation`). |
 | `server/subtask.ts` | Moteur de sous-tâche déléguée (lecture seule, modèle rapide ou local). |
 | `server/escalation.ts` | Moteur d'escalade progressive vers un modèle supérieur en cas d'échec réel. |
@@ -104,6 +105,12 @@ Tout contributeur IA doit respecter rigoureusement ces invariants :
   }
   ```
   et `costStatus` doit valoir `'estimated'`. Ne jamais déclarer faussement `provider_reported`.
+
+### D. Outils de plugin Paperclip
+- Découverte **une seule fois par run** ; la liste reste stable pendant le run (cache de prompt). Un échec de découverte n'échoue jamais le run : aucun outil de plugin et une ligne de journal.
+- **Priorité des noms** : outils de workspace, `paperclip_*`, pont MCP (`mcp_*`), `read_skill`/instructions passent d'abord. Un outil de plugin garde son nom court seulement s'il est libre, unique entre plugins et hors préfixes réservés `paperclip_`/`mcp_` ; sinon `plugin_<plugin>__<outil>` (≤ 64 caractères, stable).
+- L'appel envoie `runContext` = `agentId`, `runId`, `companyId`, `projectId` du run (exigés par le serveur) : un run sans `projectId` n'expose aucun outil de plugin.
+- Désactivable par agent : `pluginTools: false`.
 
 ---
 

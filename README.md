@@ -18,6 +18,7 @@
 - **Real-Time Rate Card Billing**: Dynamically calculates and reports estimated run costs in USD via OmniRoute's model pricing rate cards (`costStatus: 'estimated'`, `rate_card`).
 - **Subtask Delegation (`subtask`)**: Lightweight read-only delegation to fast/free models (e.g. `AC-task` or local models) without full agent re-spawning.
 - **Objective Escalation**: Resumes failed runs automatically with full conversation history on stronger models (`escalationModel` / `escalationModel2`) upon verifiable failures.
+- **Paperclip Plugin Tools**: Tools registered by installed Paperclip plugins (e.g. Hindsight memory: `hindsight_recall`, `hindsight_retain`) are discovered once per run via `GET /api/plugins/tools` with the agent's run key and dispatched through `POST /api/plugins/tools/execute` (`pluginTools`, on by default).
 - **Strict Confinement & Security**: Built-in workspace path containment (rejects dangling symlinks and directory traversal) and automatic secret redaction.
 
 ---
@@ -70,6 +71,7 @@ L'adaptateur peut être installé selon deux méthodes :
 | `subtaskModel` | `combobox` | `aucun` | Modèle rapide (ex. `AC-task`) pour l'outil de sous-tâche `subtask`. |
 | `escalationModel` | `combobox` | `aucun` | Modèle de reprise supérieur en cas d'échec réel de la tâche. |
 | `maxTurns` | `number` | `0` (illimité) | Plafond de tours modèle ↔ outils (borné par le délai global). |
+| `pluginTools` | `select` | `true` | Expose les outils des plugins Paperclip (nom court s'il est libre, sinon `plugin_<plugin>__<outil>`) ; `false` les coupe. Un run sans projet n'en reçoit aucun. |
 
 ---
 

@@ -85,6 +85,8 @@ export interface OmniRouteConfig {
   /** Lot 20 — échelle d'escalade sur échec réel, dans l'ordre ; vide = pas d'escalade. */
   escalationModels: string[];
   maxEscalations: number;
+  /** Outils des plugins Paperclip (`GET /api/plugins/tools`) ; `false` = non exposés. */
+  pluginTools: boolean;
 }
 
 type RawConfig = Record<string, unknown>;
@@ -248,6 +250,8 @@ export function resolveConfig(config: RawConfig): OmniRouteConfig {
       ...parseModelList(config.escalationModels),
     ]),
     maxEscalations: asNonNegativeInt(config.maxEscalations, DEFAULT_MAX_ESCALATIONS),
+    // Activé par défaut : seul un `false` explicite (booléen ou texte) le coupe.
+    pluginTools: !(config.pluginTools === false || config.pluginTools === 'false'),
   };
 }
 
